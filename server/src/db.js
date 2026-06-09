@@ -153,6 +153,20 @@ CREATE TABLE IF NOT EXISTS referrals (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS leads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school TEXT,
+  name TEXT,
+  phone TEXT,
+  email TEXT,
+  category TEXT,
+  size TEXT,
+  plan TEXT,
+  message TEXT,
+  source TEXT NOT NULL DEFAULT 'signup',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_students_school ON students(school_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_school_date ON attendance(school_id, date);
 CREATE INDEX IF NOT EXISTS idx_slots_school_day ON schedule_slots(school_id, day_of_week);

@@ -7,7 +7,7 @@
 window.CLASSDEE = {
   // Lead-capture endpoint that accepts a POST (JSON). e.g. Formspree, your own API.
   // Example: "https://formspree.io/f/xxxxxxx"
-  FORM_ENDPOINT: "PLACEHOLDER_FORM_ENDPOINT",
+  FORM_ENDPOINT: "https://skooldee-api-production.up.railway.app/api/leads",
 
   // Fallback when no FORM_ENDPOINT is set: the form opens the user's mail client.
   SALES_EMAIL: "sales@skooldee.com",

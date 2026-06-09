@@ -14,6 +14,7 @@ import points from './routes/points.js';
 import referrals from './routes/referrals.js';
 import dashboard from './routes/dashboard.js';
 import notify from './routes/notify.js';
+import leads from './routes/leads.js';
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
@@ -26,8 +27,10 @@ export function createApp() {
 
   app.get('/api/health', (req, res) => res.json({ ok: true, service: 'skooldee-api' }));
 
-  // public
+  // public routes (no auth required)
   app.use('/api/auth', authRoutes);
+  // leads: POST is public (form submission), GET requires auth (handled inside the router)
+  app.use('/api/leads', leads);
 
   // everything below requires a valid JWT and is automatically scoped to the
   // authenticated user's school (req.schoolId) — the multi-tenant boundary.
