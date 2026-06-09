@@ -1,0 +1,24 @@
+{
+  "name": "skooldee-server",
+  "version": "0.1.0",
+  "description": "skooldee — backend API for the tutoring-school management SaaS",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate": "node src/migrate.js",
+    "seed": "node src/seed.js",
+    "reset": "node src/migrate.js --fresh && node src/seed.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

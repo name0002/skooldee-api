@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>skooldee · ตัวอย่างระบบ (เมโลดี้ สตูดิโอ)</title>
+  <meta name="description" content="ตัวอย่างระบบ skooldee ด้วยข้อมูลสมมติ — ลองคลิกใช้งานตารางเรียน เช็คชื่อ การเงิน และการบ้านได้จริง"/>
+  <meta name="robots" content="noindex, nofollow"/>
+  <meta name="theme-color" content="#111111"/>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=Prompt:wght@400;500;600;700&family=Kanit:wght@400;500;600;700&family=Mitr:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="assets/styles.css"/>
+  <style>
+    .demo-ribbon{
+      position:fixed; top:auto; bottom:18px; right:18px; left:auto; transform:none; z-index:200;
+      background:var(--text); color:#fff; font-family:var(--ff-ui); font-size:12.5px; font-weight:600;
+      padding:8px 16px; border-radius:30px; box-shadow:var(--shadow-md); display:flex; align-items:center; gap:10px;
+      pointer-events:auto;
+    }
+    .demo-ribbon a{ color:#fff; text-decoration:underline; opacity:.85; }
+    .demo-ribbon a:hover{ opacity:1; }
+    @media (max-width:880px){ .demo-ribbon{ bottom:74px; font-size:11.5px; padding:6px 13px; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <div class="demo-ribbon">🎬 โหมดสาธิต · ข้อมูลตัวอย่าง <a href="index.html">กลับหน้าขาย</a></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="assets/data-demo.jsx"></script>
+  <script type="text/babel" src="assets/components.jsx"></script>
+  <script type="text/babel" src="assets/tweaks-panel.jsx"></script>
+  <script type="text/babel" src="assets/screens1.jsx"></script>
+  <script type="text/babel" src="assets/screens2.jsx"></script>
+  <script type="text/babel" src="assets/screens3.jsx"></script>
+  <script type="text/babel" src="assets/screens4.jsx"></script>
+  <script type="text/babel" src="assets/app.jsx"></script>
+</body>
+</html>

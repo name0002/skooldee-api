@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+server/node_modules/
+
+# Environment
+.env
+server/.env
+
+# SQLite
+server/data.sqlite
+server/data.sqlite-shm
+server/data.sqlite-wal
+
+# Logs
+server/server.log
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+_cap/

@@ -1,0 +1,6 @@
+# Redirect /app/* → demo while full app is in development
+/app /demo.html 302
+/app/* /demo.html 302
+
+# www → non-www
+https://www.skooldee.com/* https://skooldee.com/:splat 301

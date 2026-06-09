@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>เริ่มทดลองใช้ฟรี 14 วัน · skooldee</title>
+<meta name="description" content="สมัครทดลองใช้ skooldee ฟรี 14 วัน ไม่ต้องใช้บัตรเครดิต — กรอกข้อมูลโรงเรียนของคุณ ทีมงานจะติดต่อกลับและช่วยตั้งค่าให้"/>
+<meta name="robots" content="noindex, follow"/>
+<meta name="theme-color" content="#0D9488"/>
+<link rel="icon" href="favicon.svg" type="image/svg+xml"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="assets/landing.css"/>
+<link rel="stylesheet" href="assets/pages.css"/>
+<script defer src="assets/site.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <a href="index.html" class="logo">
+      <span class="logo-mark"><svg width="34" height="34" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8.5" fill="#0D9488"/><rect x="13" y="8.5" width="11.5" height="4" rx="2" fill="#FAFAF9"/><rect x="7" y="14" width="18" height="4" rx="2" fill="#F59E0B"/><rect x="7" y="19.5" width="11.5" height="4" rx="2" fill="#FAFAF9"/></svg></span>
+      <span><b style="color:#111111">skool</b><b style="color:#F59E0B">dee</b></span>
+    </a>
+    <div class="nav-cta"><a href="demo.html" class="btn btn-ghost">ดูตัวอย่างระบบ</a></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <span class="eyebrow">ทดลองฟรี 14 วัน</span>
+    <h1>เริ่มใช้ skooldee วันนี้</h1>
+    <p class="sub">กรอกข้อมูลโรงเรียนของคุณ ทีมงานจะติดต่อกลับภายใน 1 วันทำการเพื่อเปิดบัญชีและช่วยตั้งค่าให้ฟรี — ไม่ต้องใช้บัตรเครดิต</p>
+  </div>
+
+  <div class="form-layout">
+    <form class="card" data-lead novalidate>
+      <div class="form-body">
+        <div class="field">
+          <label>ชื่อโรงเรียน / สถาบัน <span class="req">*</span></label>
+          <input type="text" name="school" required placeholder="เช่น โรงเรียนดนตรีบ้านมาริ"/>
+          <div class="field-error">กรุณากรอกชื่อโรงเรียน</div>
+        </div>
+        <div class="field">
+          <label>ชื่อผู้ติดต่อ <span class="req">*</span></label>
+          <input type="text" name="name" required placeholder="ชื่อ-นามสกุล"/>
+          <div class="field-error">กรุณากรอกชื่อผู้ติดต่อ</div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>เบอร์โทร / LINE ID <span class="req">*</span></label>
+            <input type="text" name="phone" required placeholder="08x-xxx-xxxx หรือ @lineid"/>
+            <div class="field-error">กรุณากรอกช่องทางติดต่อ</div>
+          </div>
+          <div class="field">
+            <label>อีเมล</label>
+            <input type="email" name="email" placeholder="you@email.com"/>
+            <div class="field-error">อีเมลไม่ถูกต้อง</div>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>ประเภทคลาสที่เปิดสอน</label>
+            <select name="category">
+              <option value="">— เลือก —</option>
+              <option>ดนตรี</option>
+              <option>เต้น</option>
+              <option>ศิลปะ</option>
+              <option>วิชาการ (ติวเตอร์)</option>
+              <option>หลายประเภท</option>
+              <option>อื่น ๆ</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>จำนวนนักเรียนโดยประมาณ</label>
+            <select name="size">
+              <option value="">— เลือก —</option>
+              <option>1–50 คน</option>
+              <option>51–150 คน</option>
+              <option>151–500 คน</option>
+              <option>มากกว่า 500 คน</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>แพ็กเกจที่สนใจ</label>
+          <select name="plan">
+            <option value="">— ยังไม่แน่ใจ ให้ทีมงานแนะนำ —</option>
+            <option value="starter">เริ่มต้น (฿590/เดือน)</option>
+            <option value="pro">โปร (฿1,290/เดือน)</option>
+            <option value="premium">พรีเมียม (฿2,490/เดือน)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>ข้อความเพิ่มเติม</label>
+          <textarea name="message" placeholder="บอกเราเกี่ยวกับโรงเรียนของคุณ หรือสิ่งที่อยากให้ช่วย"></textarea>
+        </div>
+        <label class="checkrow">
+          <input type="checkbox" name="consent"/>
+          <span>ฉันยินยอมให้ skooldee เก็บและใช้ข้อมูลเพื่อติดต่อกลับ ตาม<a href="privacy.html" target="_blank">นโยบายความเป็นส่วนตัว</a> <span class="req">*</span></span>
+        </label>
+        <button type="submit" class="btn btn-primary btn-lg" style="width:100%">เริ่มทดลองใช้ฟรี</button>
+      </div>
+
+      <div class="form-success">
+        <div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div>
+        <h3>ได้รับข้อมูลแล้ว ขอบคุณครับ! 🎉</h3>
+        <p>ทีมงาน skooldee จะติดต่อกลับภายใน 1 วันทำการ เพื่อเปิดบัญชีทดลองและช่วยตั้งค่าให้</p>
+        <a href="index.html" class="btn btn-ghost">กลับหน้าแรก</a>
+      </div>
+    </form>
+
+    <aside class="aside-card">
+      <h3>สิ่งที่คุณจะได้</h3>
+      <ul class="check-list">
+        <li><span class="ck"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span>ทดลองใช้เต็มระบบฟรี 14 วัน</li>
+        <li><span class="ck"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span>ทีมงานช่วยตั้งค่าและนำเข้าข้อมูลให้</li>
+        <li><span class="ck"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span>ไม่ต้องใช้บัตรเครดิต ยกเลิกได้ทุกเมื่อ</li>
+      </ul>
+      <div class="aside-note">
+        <span>💬</span>
+        <span>อยากคุยก่อน? ทักเราได้ที่ <a href="contact.html">หน้าติดต่อ</a> หรือทาง LINE</span>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<footer style="margin-top:0">
+  <div class="wrap">
+    <div class="foot-bottom" style="border-top:none;margin-top:0;padding-top:0">
+      <span>© 2026 skooldee · ระบบบริหารโรงเรียนสอนพิเศษ</span>
+      <span><a href="privacy.html" style="color:var(--ink-3)">นโยบายความเป็นส่วนตัว</a> · <a href="terms.html" style="color:var(--ink-3)">เงื่อนไข</a></span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

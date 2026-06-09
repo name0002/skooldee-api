@@ -1,0 +1,80 @@
+/* ============ skooldee — shared styles for sub-pages (signup / contact / legal) ============ */
+/* Loaded AFTER landing.css so it reuses the same design tokens (--terra, --ink, etc.) */
+
+/* simple top bar for sub-pages */
+.topbar{ position:sticky; top:0; z-index:50; background:oklch(0.985 0.006 70 / 0.9); backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border); }
+.topbar .wrap{ display:flex; align-items:center; height:66px; gap:14px; }
+.topbar .nav-cta{ margin-left:auto; }
+
+/* page header */
+.page-head{ padding:54px 0 22px; }
+.page-head .eyebrow{ margin-bottom:14px; }
+.page-head h1{ font-family:var(--ff-d); font-size:40px; letter-spacing:-0.02em; margin:0; }
+.page-head p.sub{ font-size:18px; color:var(--ink-2); margin:14px 0 0; max-width:620px; }
+
+/* two-column layout for signup/contact (form + aside) */
+.form-layout{ display:grid; grid-template-columns:1.1fr 0.9fr; gap:48px; align-items:start; padding:24px 0 80px; }
+
+/* form card */
+.card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:30px 28px; box-shadow:var(--sh-sm); }
+.field{ margin-bottom:18px; }
+.field label{ display:block; font-size:14.5px; font-weight:600; color:var(--ink); margin-bottom:7px; }
+.field .req{ color:#dc2626; }
+.field input, .field select, .field textarea{
+  width:100%; font-family:var(--ff); font-size:15.5px; color:var(--ink);
+  padding:12px 14px; border:1.5px solid var(--border-2); border-radius:11px; background:var(--surface); transition:.15s; }
+.field input:focus, .field select:focus, .field textarea:focus{
+  outline:none; border-color:var(--terra); box-shadow:0 0 0 3px var(--terra-soft); }
+.field textarea{ min-height:108px; resize:vertical; }
+.field .hint{ font-size:12.5px; color:var(--ink-3); margin-top:6px; }
+.field-row{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.field-error{ color:#dc2626; font-size:12.5px; margin-top:6px; display:none; }
+.field.invalid input, .field.invalid select{ border-color:#dc2626; }
+.field.invalid .field-error{ display:block; }
+.checkrow{ display:flex; gap:10px; align-items:flex-start; font-size:14px; color:var(--ink-2); margin:6px 0 22px; }
+.checkrow input{ width:18px; height:18px; margin-top:2px; flex:0 0 18px; accent-color:var(--terra); }
+.checkrow a{ color:var(--terra-ink); text-decoration:underline; }
+
+/* form aside / benefits */
+.aside-card{ background:var(--bg-warm); border:1px solid var(--border); border-radius:var(--r-lg); padding:26px 24px; }
+.aside-card h3{ font-size:18px; margin:0 0 16px; }
+.aside-card .check-list li{ font-size:14.5px; }
+.aside-note{ margin-top:18px; font-size:13.5px; color:var(--ink-3); display:flex; gap:9px; align-items:flex-start; }
+
+/* form success state */
+.form-success{ display:none; text-align:center; padding:30px 10px; }
+.form-success.show{ display:block; }
+.form-success .ic{ width:64px; height:64px; border-radius:50%; background:color-mix(in oklch,#06c755 14%,white); color:#06c755;
+  display:grid; place-items:center; margin:0 auto 18px; }
+.form-success h3{ font-size:24px; margin:0 0 10px; }
+.form-success p{ color:var(--ink-2); margin:0 auto 22px; max-width:380px; }
+form.sent .form-body{ display:none; }
+form.sent .form-success{ display:block; }
+
+/* legal / article pages */
+.legal{ max-width:820px; margin:0 auto; padding:10px 0 80px; }
+.legal .updated{ font-size:13.5px; color:var(--ink-3); margin:0 0 30px; }
+.legal h2{ font-family:var(--ff-d); font-size:24px; margin:36px 0 12px; }
+.legal h3{ font-size:18px; margin:24px 0 8px; }
+.legal p, .legal li{ font-size:15.5px; color:var(--ink-2); line-height:1.75; }
+.legal ul{ padding-left:22px; margin:10px 0; }
+.legal li{ margin:6px 0; }
+.legal a{ color:var(--terra-ink); text-decoration:underline; }
+.legal .placeholder{ background:#FEF3C7; color:#92400e; padding:1px 7px; border-radius:5px; font-size:13.5px; font-weight:600; }
+.legal table{ width:100%; border-collapse:collapse; margin:14px 0; font-size:14.5px; }
+.legal th, .legal td{ border:1px solid var(--border); padding:10px 12px; text-align:left; vertical-align:top; }
+.legal th{ background:var(--bg-warm); font-weight:600; color:var(--ink); }
+
+/* contact channels */
+.channels{ display:flex; flex-direction:column; gap:14px; margin-top:6px; }
+.channel{ display:flex; gap:13px; align-items:center; padding:14px 16px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+.channel .ic{ width:42px; height:42px; border-radius:11px; display:grid; place-items:center; flex:0 0 42px; }
+.channel b{ display:block; font-size:15px; }
+.channel span{ font-size:13.5px; color:var(--ink-3); }
+
+@media (max-width:860px){
+  .form-layout{ grid-template-columns:1fr; gap:28px; }
+  .page-head h1{ font-size:32px; }
+  .field-row{ grid-template-columns:1fr; }
+}
