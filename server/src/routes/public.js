@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { all, get, run } from '../db.js';
 import { wrap, bad, hhmm } from '../util.js';
+import { sendEmail, tplNewEnrollment } from '../email.js';
 
 const r = Router();
 
@@ -137,9 +138,10 @@ r.get('/student/:token', wrap((req, res) => {
   if (token.length < 8) throw bad('not found', 404);
   const s = get('SELECT * FROM students WHERE parent_token = ?', token);
   if (!s) throw bad('not found', 404);
-  const school = get('SELECT name, contact_phone, logo_image, payment_qr_image FROM schools WHERE id = ?', s.school_id);
+  const school = get('SELECT name, slug, contact_phone, logo_image, payment_qr_image FROM schools WHERE id = ?', s.school_id);
   res.json({
     school: school ? school.name : 'โรงเรียน',
+    school_slug: (school && school.slug) || null,
     school_contact_phone: (school && school.contact_phone) || null,
     school_logo: (school && school.logo_image) || null,
     payment_qr_image: (school && school.payment_qr_image) || null,
@@ -160,7 +162,7 @@ r.get('/family/:token', wrap((req, res) => {
   const anchor = get('SELECT * FROM students WHERE parent_token = ?', token);
   if (!anchor) throw bad('not found', 404);
 
-  const school = get('SELECT name, contact_phone, logo_image, payment_qr_image FROM schools WHERE id = ?', anchor.school_id);
+  const school = get('SELECT name, slug, contact_phone, logo_image, payment_qr_image FROM schools WHERE id = ?', anchor.school_id);
 
   let siblings = [anchor];
   if (anchor.line_user_id) {
@@ -177,6 +179,7 @@ r.get('/family/:token', wrap((req, res) => {
 
   res.json({
     school: school ? school.name : 'โรงเรียน',
+    school_slug: (school && school.slug) || null,
     school_contact_phone: (school && school.contact_phone) || null,
     school_logo: (school && school.logo_image) || null,
     payment_qr_image: (school && school.payment_qr_image) || null,
@@ -325,23 +328,63 @@ r.get('/school/:slug', wrap((req, res) => {
 r.post('/enroll', wrap((req, res) => {
   const { slug, student_name, parent_name, phone, line_id, category, note } = req.body || {};
   if (!slug) throw bad('missing slug');
-  const school = get('SELECT id FROM schools WHERE LOWER(slug) = ?', String(slug).toLowerCase().trim());
+  const school = get('SELECT id, name, category, categories_json FROM schools WHERE LOWER(slug) = ?', String(slug).toLowerCase().trim());
   if (!school) throw bad('ไม่พบโรงเรียน', 404);
   const sName = String(student_name || '').trim().slice(0, 100);
   if (!sName) throw bad('กรุณากรอกชื่อนักเรียน');
   const ph = String(phone || '').trim().slice(0, 30);
   if (!ph) throw bad('กรุณากรอกเบอร์โทรศัพท์');
+  const catKey = String(category || '').trim().slice(0, 60) || null;
+  const noteVal = String(note || '').trim().slice(0, 500) || null;
+  const parentVal = String(parent_name || '').trim().slice(0, 100) || null;
+  const lineVal = String(line_id || '').trim().slice(0, 60) || null;
   const result = run(
     `INSERT INTO enrollment_requests (school_id, student_name, parent_name, phone, line_id, category, note)
      VALUES (?,?,?,?,?,?,?)`,
-    school.id, sName,
-    String(parent_name || '').trim().slice(0, 100) || null,
-    ph,
-    String(line_id || '').trim().slice(0, 60) || null,
-    String(category || '').trim().slice(0, 60) || null,
-    String(note || '').trim().slice(0, 500) || null,
+    school.id, sName, parentVal, ph, lineVal, catKey, noteVal,
   );
   res.json({ ok: true, id: Number(result.lastInsertRowid) });
+
+  // Fire-and-forget: email the school's owner/admins so they follow up fast.
+  // Must never block or fail the applicant's submission.
+  notifyNewEnrollment(school, {
+    studentName: sName, parentName: parentVal, phone: ph,
+    lineId: lineVal, category: catKey, note: noteVal,
+  }).catch(() => {});
 }));
+
+// Resolve a category key to its human label (school's own list first, then defaults)
+// and email every owner/admin of the school about a new enrollment request.
+async function notifyNewEnrollment(school, data) {
+  const CAT_LABELS = {
+    piano: 'เปียโน', guitar: 'กีตาร์', singing: 'ร้องเพลง', sing: 'ร้องเพลง',
+    dance: 'เต้น', art: 'ศิลปะ', drums: 'กลอง', violin: 'ไวโอลิน',
+    english: 'ภาษาอังกฤษ', math: 'คณิตศาสตร์', science: 'วิทยาศาสตร์', other: 'อื่นๆ',
+  };
+  let catLabel = data.category || '';
+  try {
+    if (school.categories_json) {
+      const raw = JSON.parse(school.categories_json);
+      const hit = Array.isArray(raw) && raw.find((c) => c.key === data.category);
+      if (hit && hit.label) catLabel = hit.label;
+    }
+  } catch { /* ignore */ }
+  if (catLabel && CAT_LABELS[catLabel]) catLabel = CAT_LABELS[catLabel];
+  else if (data.category && CAT_LABELS[data.category]) catLabel = CAT_LABELS[data.category];
+
+  const admins = all(
+    "SELECT DISTINCT email FROM users WHERE school_id = ? AND role IN ('owner','admin') AND email IS NOT NULL AND email != ''",
+    school.id);
+  if (!admins.length) return;
+
+  const tpl = tplNewEnrollment({
+    schoolName: school.name || 'โรงเรียน',
+    studentName: data.studentName, parentName: data.parentName,
+    phone: data.phone, lineId: data.lineId, category: catLabel, note: data.note,
+  });
+  for (const a of admins) {
+    try { await sendEmail({ to: a.email, subject: tpl.subject, html: tpl.html }); } catch { /* swallow */ }
+  }
+}
 
 export default r;

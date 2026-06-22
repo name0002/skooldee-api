@@ -505,6 +505,20 @@
       html += '<div class="bar"><i class="'+(low?'bar-low':'bar-ok')+'" style="width:'+pct+'%"></i></div>';
       if(low) html += '<div class="sess-warn">⚠️ คาบใกล้หมดแล้ว — ติดต่อโรงเรียนเพื่อต่อคอร์ส</div>';
     }
+    /* ── ต่อคอร์ส button (links to the school's public renew page) ── */
+    var renewSlug = FAM ? FAM.school_slug : null;
+    if(renewSlug){
+      var renewUrl = '/renew?school=' + encodeURIComponent(renewSlug);
+      if(low){
+        html += '<a href="'+renewUrl+'" style="display:flex;align-items:center;justify-content:center;gap:7px;margin-top:13px;'
+              + 'padding:12px;background:var(--teal);color:#fff;border-radius:12px;font-weight:700;font-size:15px;text-decoration:none">'
+              + '🔄 ต่อคอร์สเลย</a>';
+      } else {
+        html += '<a href="'+renewUrl+'" style="display:flex;align-items:center;justify-content:center;gap:7px;margin-top:13px;'
+              + 'padding:11px;background:transparent;border:1.5px solid var(--teal);color:var(--teal);border-radius:12px;'
+              + 'font-weight:700;font-size:14.5px;text-decoration:none">🔄 ดูแพ็กเกจ / ต่อคอร์ส</a>';
+      }
+    }
     if(s.goal){
       html += '<div class="goal-box" style="margin-top:12px">🎯 เป้าหมาย: '+esc(s.goal)+'</div>';
     }
