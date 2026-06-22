@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="robots" content="noindex"/>
+<title>ข้อมูลการเรียน · skooldee</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --teal:#0D9488; --teal-soft:#d6f0ec; --teal-dk:#0a7a70;
+    --orange:#F59E0B; --orange-soft:#fef3c7;
+    --red:#e53e3e; --red-soft:#fde8e8;
+    --green:#16a34a; --green-soft:#dcfce7;
+    --yellow:#d97706; --yellow-soft:#fef3c7;
+    --ink:#1a2b29; --muted:#6b7c79; --line:#e7eceb; --bg:#f0f5f4;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:'Sarabun',sans-serif; background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased; }
+  .wrap{ max-width:480px; margin:0 auto; padding:0 14px 48px; }
+
+  /* ── header ── */
+  .head{ background:linear-gradient(140deg,#0b7d72,var(--teal) 60%,#11a393); color:#fff; padding:22px 20px 28px; border-radius:0 0 24px 24px; }
+  .brand{ display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px; opacity:.9; margin-bottom:14px; }
+  .stu-avatar{ width:52px; height:52px; border-radius:50%; background:rgba(255,255,255,.22); font-size:24px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .stu-info{ flex:1; min-width:0; }
+  .stu-name{ font-size:22px; font-weight:700; line-height:1.2; }
+  .stu-sub{ font-size:13px; opacity:.85; margin-top:2px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .chip{ background:rgba(255,255,255,.2); font-size:12px; font-weight:600; padding:3px 11px; border-radius:99px; }
+
+  /* ── child switcher ── */
+  .kid-switch{ margin-top:14px; }
+  .kid-switch-label{ font-size:12.5px; color:var(--muted); font-weight:600; margin-bottom:8px; }
+  .kid-pills{ display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; -webkit-overflow-scrolling:touch; }
+  .kid-pills::-webkit-scrollbar{ display:none; }
+  .kid-pill{ flex:0 0 auto; display:flex; align-items:center; gap:7px; padding:6px 14px 6px 6px; border-radius:99px;
+             border:1.5px solid var(--line); background:#fff; color:var(--ink); font-family:inherit;
+             font-size:13.5px; font-weight:600; cursor:pointer; transition:all .15s; }
+  .kid-pill-av{ width:26px; height:26px; border-radius:50%; background:var(--teal-soft); color:var(--teal-dk);
+                display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
+  .kid-pill.on{ border-color:var(--teal); background:var(--teal); color:#fff; }
+  .kid-pill.on .kid-pill-av{ background:rgba(255,255,255,.25); color:#fff; }
+
+  /* ── cards ── */
+  .card{ background:#fff; border-radius:16px; padding:16px 16px; margin-top:12px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+  .card-title{ font-size:14px; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:7px; }
+  .card-title .icon{ font-size:16px; }
+
+  /* ── alert card ── */
+  .alert-card{ border-radius:14px; padding:14px 16px; margin-top:12px; display:flex; gap:12px; align-items:flex-start; }
+  .alert-card.warn{ background:var(--orange-soft); border:1.5px solid #f6c04a; }
+  .alert-card.danger{ background:var(--red-soft); border:1.5px solid #f9a8a8; }
+  .alert-icon{ font-size:22px; flex-shrink:0; }
+  .alert-body{ flex:1; min-width:0; }
+  .alert-title{ font-weight:700; font-size:14.5px; margin-bottom:3px; }
+  .alert-sub{ font-size:13px; color:var(--muted); line-height:1.5; }
+  .alert-amount{ font-size:22px; font-weight:700; color:var(--red); margin:4px 0 2px; }
+
+  /* ── sessions ── */
+  .sess-row{ display:flex; align-items:center; gap:14px; }
+  .sess-big{ font-size:44px; font-weight:700; color:var(--teal); line-height:1; font-variant-numeric:tabular-nums; }
+  .sess-big.low{ color:var(--red); }
+  .sess-of{ font-size:15px; color:var(--muted); font-weight:500; margin-top:4px; }
+  .bar{ height:8px; background:#eef2f1; border-radius:99px; overflow:hidden; margin-top:10px; }
+  .bar > i{ display:block; height:100%; border-radius:99px; transition:width .6s ease; }
+  .bar-ok{ background:var(--teal); }
+  .bar-low{ background:var(--red); }
+  .sess-warn{ font-size:12.5px; color:var(--red); font-weight:600; margin-top:8px; }
+  /* ── per-category sessions ── */
+  .cat-sess-row{ display:flex; align-items:center; gap:10px; margin-top:12px; }
+  .cat-sess-label{ font-size:13px; font-weight:600; min-width:78px; color:var(--ink); }
+  .cat-sess-nums{ font-size:12.5px; color:var(--muted); white-space:nowrap; min-width:54px; text-align:right; }
+  .cat-bar{ flex:1; height:6px; background:#eef2f1; border-radius:99px; overflow:hidden; }
+  .cat-bar > i{ display:block; height:100%; border-radius:99px; }
+  .cat-bar-ok{ background:var(--teal); }
+  .cat-bar-low{ background:var(--red); }
+  /* ── development assessment ── */
+  .assess-subj{ margin-top:14px; }
+  .assess-subj:first-child{ margin-top:4px; }
+  .assess-subj-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; }
+  .assess-subj-name{ font-size:14px; font-weight:700; }
+  .assess-date{ font-size:11.5px; color:var(--muted); }
+  .assess-row{ display:flex; align-items:center; justify-content:space-between; padding:4px 0; font-size:13px; }
+  .assess-row .crit{ color:var(--ink); }
+  .stars{ letter-spacing:1px; font-size:14px; line-height:1; }
+  .stars .on{ color:#f59e0b; }
+  .stars .off{ color:#dfe6e4; }
+  .assess-note{ font-size:12.5px; color:var(--muted); font-style:italic; margin-top:6px; }
+
+  /* ── schedule ── */
+  .sched-row{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .sched-row:last-child{ border-bottom:none; }
+  .day-pill{ flex:0 0 auto; width:52px; text-align:center; background:#f1f6f5; border-radius:10px; padding:7px 4px; }
+  .day-pill b{ display:block; font-size:12.5px; font-weight:700; }
+  .day-pill span{ font-size:10.5px; color:var(--muted); }
+  .sched-main{ flex:1; min-width:0; }
+  .sched-main b{ font-size:14px; }
+  .sched-main span{ display:block; font-size:12px; color:var(--muted); margin-top:1px; }
+  .time-badge{ font-weight:700; color:var(--teal); font-size:13px; white-space:nowrap; }
+
+  /* ── attendance ── */
+  .att-grid{ display:grid; grid-template-columns:repeat(5,1fr); gap:7px; }
+  .att-cell{ text-align:center; }
+  .att-dot{ width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:16px; }
+  .att-dot.present{ background:var(--green-soft); color:var(--green); }
+  .att-dot.absent{ background:var(--red-soft); color:var(--red); }
+  .att-dot.leave{ background:var(--yellow-soft); color:var(--yellow); }
+  .att-dot.unknown{ background:#f1f6f5; color:var(--muted); }
+  .att-date{ font-size:10.5px; color:var(--muted); }
+  .att-legend{ display:flex; gap:14px; margin-top:12px; flex-wrap:wrap; }
+  .att-legend span{ font-size:12px; color:var(--muted); display:flex; align-items:center; gap:5px; }
+  .leg-dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+
+  /* ── homework ── */
+  .hw-row{ display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .hw-row:last-child{ border-bottom:none; }
+  .hw-dot{ width:9px; height:9px; border-radius:50%; margin-top:6px; flex:0 0 auto; }
+  .hw-main{ flex:1; }
+  .hw-main b{ font-size:14px; }
+  .hw-main p{ margin:2px 0 0; font-size:12.5px; color:var(--muted); }
+  .hw-status{ font-size:11.5px; font-weight:700; padding:2px 9px; border-radius:99px; white-space:nowrap; }
+
+  /* ── misc ── */
+  .goal-box{ background:var(--teal-soft); border-radius:10px; padding:11px 13px; font-size:13.5px; color:var(--teal-dk); line-height:1.6; }
+  .empty{ color:var(--muted); font-size:13.5px; text-align:center; padding:16px 0; }
+  .foot{ text-align:center; color:var(--muted); font-size:11.5px; margin-top:22px; line-height:1.8; }
+  .center-screen{ min-height:90vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; color:var(--muted); }
+  .center-screen .big{ font-size:48px; margin-bottom:12px; }
+
+  /* ── QR payment card ── */
+  .qr-card{ background:#fff; border-radius:16px; padding:16px; margin-top:12px; box-shadow:0 1px 4px rgba(0,0,0,.06); text-align:center; }
+  .qr-card img{ max-width:220px; width:100%; border-radius:10px; display:block; margin:10px auto; }
+  .qr-title{ font-size:14px; font-weight:700; margin-bottom:4px; }
+  .qr-sub{ font-size:12.5px; color:var(--muted); margin-bottom:12px; }
+  .inv-row{ display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line); }
+  .inv-row:last-child{ border-bottom:none; }
+  .inv-amount{ font-weight:700; font-size:16px; color:var(--ink); }
+  .inv-date{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .btn-slip{ display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:10px; border:none;
+             background:var(--teal); color:#fff; font-family:inherit; font-size:13.5px; font-weight:600;
+             cursor:pointer; transition:opacity .15s; }
+  .btn-slip:disabled{ opacity:.6; cursor:not-allowed; }
+  .slip-sent{ display:inline-flex; align-items:center; gap:6px; padding:7px 13px; border-radius:10px;
+              background:var(--teal-soft); color:var(--teal-dk); font-size:13px; font-weight:600; }
+</style>
+</head>
+<body>
+<div id="app"><div class="center-screen"><div class="big">⏳</div><div>กำลังโหลดข้อมูล…</div></div></div>
+
+<script>
+  var API_BASE = "https://skooldee-api-production.up.railway.app";
+  var _q = new URLSearchParams(location.search);
+  // accept either ?t= (teacher copy-link) or ?token= (LINE Rich Menu)
+  var token = _q.get("t") || _q.get("token") || "";
+
+  var logoSvg = '<svg width="24" height="24" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8.5" fill="#ffffff"/><rect x="13" y="8.5" width="11.5" height="4" rx="2" fill="#0D9488"/><rect x="7" y="14" width="18" height="4" rx="2" fill="#F59E0B"/><rect x="7" y="19.5" width="11.5" height="4" rx="2" fill="#0D9488"/></svg>';
+
+  var THMON_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var CAT_LABEL = { piano:'เปียโน', guitar:'กีตาร์', sing:'ร้องเพลง', singing:'ร้องเพลง', dance:'เต้น', art:'ศิลปะ', drums:'กลอง', violin:'ไวโอลิน', english:'ภาษาอังกฤษ', math:'คณิตศาสตร์' };
+
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  function fmtDate(iso){
+    if(!iso) return '';
+    var p = iso.slice(0,10).split('-');
+    return parseInt(p[2],10)+' '+THMON_SHORT[parseInt(p[1],10)-1];
+  }
+
+  function baht(n){ return '฿'+(n||0).toLocaleString('th-TH'); }
+
+  function starsHtml(v){
+    v = Math.max(0, Math.min(5, Math.round(v||0)));
+    return '<span class="stars"><span class="on">'+'★'.repeat(v)+'</span><span class="off">'+'★'.repeat(5-v)+'</span></span>';
+  }
+
+  function screen(html){ document.getElementById("app").innerHTML = html; }
+
+  function errScreen(){
+    screen('<div class="center-screen"><div class="big">🔍</div><b>ไม่พบข้อมูล</b><br/><span style="font-size:13px;margin-top:8px;display:block">ลิงก์อาจไม่ถูกต้อง กรุณาขอลิงก์ใหม่จากทางโรงเรียน</span></div>');
+  }
+
+  /* ── family state: all of a guardian's children, with one selected ── */
+  var FAM = null;      // { school, children:[...] }
+  var FAM_IDX = 0;     // currently shown child
+
+  function selectChild(i){
+    if(!FAM || !FAM.children[i]) return;
+    FAM_IDX = i;
+    render(childView(i));
+    window.scrollTo({ top:0, behavior:'smooth' });
+  }
+  window.selectChild = selectChild;
+
+  /* merge the shared school name onto the selected child's payload */
+  function childView(i){
+    var c = FAM.children[i] || {};
+    return Object.assign({}, c, { school: FAM.school });
+  }
+
+  if(token.length < 8){ errScreen(); }
+  else {
+    fetch(API_BASE + "/api/public/family/" + encodeURIComponent(token))
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(fam){
+        if(!fam || !Array.isArray(fam.children) || !fam.children.length) throw 0;
+        FAM = fam; FAM_IDX = 0;
+        render(childView(0));
+      })
+      .catch(errScreen);
+  }
+
+  /* compress an image file to JPEG before uploading (keeps slip small) */
+  function compressImg(file, maxW, quality){
+    maxW = maxW||900; quality = quality||0.65;
+    return new Promise(function(resolve, reject){
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function(){
+        URL.revokeObjectURL(url);
+        var scale = Math.min(1, maxW/(img.width||maxW));
+        var cw = Math.max(1, Math.round(img.width*scale));
+        var ch = Math.max(1, Math.round(img.height*scale));
+        var cv = document.createElement('canvas'); cv.width=cw; cv.height=ch;
+        cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+        try{ resolve(cv.toDataURL('image/jpeg', quality)); }catch(e){ reject(e); }
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  /* called when parent taps "แนบสลิป" button for a specific invoice */
+  window._slipInputs = {}; // keyed by invoice id
+
+  window.triggerSlipUpload = function(invoiceId){
+    var inp = window._slipInputs[invoiceId];
+    if(inp) inp.click();
+  };
+
+  window.onSlipFile = function(invoiceId, childToken, inputEl){
+    var file = inputEl.files && inputEl.files[0]; if(!file) return;
+    var btn = document.getElementById('slip-btn-'+invoiceId);
+    if(btn){ btn.disabled=true; btn.textContent='กำลังส่ง…'; }
+    compressImg(file)
+      .then(function(dataUrl){
+        if(dataUrl.length > 3000000) throw new Error('รูปใหญ่เกินไป ลองถ่ายใหม่');
+        return fetch(API_BASE + '/api/public/invoice-slip', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ token: childToken, invoice_id: invoiceId, image: dataUrl }),
+        });
+      })
+      .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||'ส่งไม่สำเร็จ'); return j; }); })
+      .then(function(){
+        /* update local state + re-render */
+        var fam = FAM; if(!fam) return;
+        fam.children.forEach(function(c){
+          if(!c.invoices_unpaid) return;
+          c.invoices_unpaid.forEach(function(inv){
+            if(inv.id === invoiceId) inv.status = 'pending_verification';
+          });
+        });
+        render(childView(FAM_IDX));
+      })
+      .catch(function(err){
+        alert('ส่งสลิปไม่สำเร็จ: '+(err.message||err));
+        if(btn){ btn.disabled=false; btn.textContent='📸 แนบสลิป'; }
+      });
+    inputEl.value='';
+  };
+
+  /* print / download a paid receipt as PDF via browser print dialog */
+  window.printParentReceipt = function(invId){
+    var fam = FAM; if(!fam) return;
+    var d = childView(FAM_IDX); if(!d) return;
+    var inv = (d.invoices_paid||[]).find(function(x){ return x.id === invId; });
+    if(!inv){ alert('ไม่พบข้อมูลใบเสร็จ'); return; }
+    var studentName = (d.student && (d.student.name || d.student.nickname)) || '-';
+    var schoolName  = fam.school || 'โรงเรียน';
+    var schoolContact = fam.school_contact_phone || '';
+    var schoolLogo  = fam.school_logo || null;
+    var THMON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    var fmtD = function(iso){ if(!iso) return '-'; var p=iso.slice(0,10).split('-'); return parseInt(p[2],10)+' '+THMON[parseInt(p[1],10)-1]+' '+(parseInt(p[0],10)+543); };
+    var discAmt = (inv.subtotal||0) > (inv.amount||0) ? (inv.subtotal||0)-(inv.amount||0) : 0;
+    var logoHtml = schoolLogo
+      ? '<img src="'+esc(schoolLogo)+'" alt="logo" style="width:72px;height:72px;object-fit:contain;border-radius:12px;display:block;margin:0 auto 10px"/>'
+      : '<div style="width:72px;height:72px;background:rgba(255,255,255,.25);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:30px;font-weight:800">'+esc(schoolName[0]||'S')+'</div>';
+    var w = window.open('','_blank','width=720,height=960');
+    w.document.write('<!DOCTYPE html><html lang="th"><head>'
+      +'<meta charset="utf-8"/><title>ใบเสร็จรับเงิน</title>'
+      +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>'
+      +'<style>'
+      +'*{box-sizing:border-box;margin:0;padding:0}'
+      +'body{font-family:\'Sarabun\',sans-serif;background:#f0f5f4;color:#1a2b29;font-size:15px;-webkit-font-smoothing:antialiased}'
+      +'.page{max-width:640px;margin:24px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 6px 32px rgba(0,0,0,.12)}'
+      +'.hdr{background:linear-gradient(135deg,#0a7a70,#0D9488 55%,#11a393);color:#fff;padding:32px 40px 28px;text-align:center}'
+      +'.school-name{font-size:21px;font-weight:800;margin-bottom:3px}'
+      +'.school-sub{font-size:13px;opacity:.85;margin-bottom:2px}'
+      +'.doc-badge{display:inline-block;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);border-radius:20px;padding:3px 14px;font-size:12px;letter-spacing:1px;margin-top:10px}'
+      +'.body{padding:28px 40px}'
+      +'.meta-row{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:18px;border-bottom:1.5px solid #e5ecea;margin-bottom:20px}'
+      +'.inv-no-box .lbl{font-size:11px;color:#9ab0aa;font-weight:600;letter-spacing:.6px;margin-bottom:3px}'
+      +'.inv-no{font-size:24px;font-weight:800;color:#0D9488;font-variant-numeric:tabular-nums}'
+      +'.date-box{text-align:right;font-size:13px;color:#6b7c79;line-height:1.8}'
+      +'.date-box b{color:#1a2b29;font-size:14px}'
+      +'.section{background:#f7faf9;border-radius:12px;padding:14px 18px;margin-bottom:16px}'
+      +'.s-title{font-size:11px;font-weight:700;color:#9ab0aa;letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px}'
+      +'.row{display:flex;justify-content:space-between;align-items:baseline;margin:5px 0;font-size:14.5px}'
+      +'.row .lbl{color:#6b7c79}.row .val{font-weight:600;text-align:right;max-width:55%}'
+      +'.amount-box{background:#f0faf8;border-radius:12px;padding:16px 18px;margin-bottom:18px}'
+      +'.disc-row{display:flex;justify-content:space-between;font-size:14px;margin:4px 0;color:#6b7c79}'
+      +'.disc-row .disc-val{color:#dc2626;font-weight:600}'
+      +'.divider{border:none;border-top:1.5px dashed #c4d8d4;margin:10px 0}'
+      +'.total-row{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:2px solid #0D9488}'
+      +'.total-lbl{font-size:16px;font-weight:700}'
+      +'.total-val{font-size:28px;font-weight:800;color:#0D9488;line-height:1}'
+      +'.stamp-wrap{text-align:center;margin-bottom:6px}'
+      +'.stamp{display:inline-block;padding:8px 28px;border-radius:10px;font-weight:800;font-size:16px;border:3px solid #0D9488;color:#0D9488}'
+      +'.footer{text-align:center;padding:18px 40px;border-top:1px solid #e5ecea;font-size:12.5px;color:#9ab0aa;line-height:1.8}'
+      +'@media print{body{background:#fff}.page{box-shadow:none;margin:0;border-radius:0;max-width:100%}@page{size:A4;margin:8mm 14mm}}'
+      +'</style></head><body>'
+      +'<div class="page">'
+      +'<div class="hdr">'+logoHtml
+        +'<div class="school-name">'+esc(schoolName)+'</div>'
+        +(schoolContact?'<div class="school-sub">☎ '+esc(schoolContact)+'</div>':'')
+        +'<div class="doc-badge">ใบเสร็จรับเงิน</div>'
+      +'</div>'
+      +'<div class="body">'
+        +'<div class="meta-row">'
+          +'<div class="inv-no-box"><div class="lbl">เลขที่</div><div class="inv-no">INV-'+String(inv.id).padStart(4,'0')+'</div></div>'
+          +'<div class="date-box">'
+            +'<div>วันที่ออกบิล</div><div><b>'+fmtD(inv.issued_at)+'</b></div>'
+            +(inv.paid_at?'<div style="margin-top:4px">วันที่ชำระ</div><div style="color:#0D9488;font-weight:700">'+fmtD(inv.paid_at)+'</div>':'')
+          +'</div>'
+        +'</div>'
+        +'<div class="section"><div class="s-title">ผู้ชำระ</div>'
+          +'<div class="row"><span class="lbl">นักเรียน</span><span class="val">'+esc(studentName)+'</span></div>'
+        +'</div>'
+        +'<div class="section"><div class="s-title">รายการ</div>'
+          +'<div class="row"><span class="lbl">คอร์ส / แพ็กเกจ</span><span class="val">'+esc(inv.course||'คอร์สเรียน')+'</span></div>'
+        +'</div>'
+        +'<div class="amount-box"><div class="s-title">ยอดเงิน</div>'
+          +(discAmt>0
+            ? '<div class="disc-row"><span>ราคาปกติ</span><span>'+baht(inv.subtotal)+'</span></div>'
+              +'<div class="disc-row"><span>ส่วนลด'+(inv.discount_type==='percent'?' ('+inv.discount_value+'%)':'')+'</span><span class="disc-val">−'+baht(discAmt)+'</span></div>'
+              +'<hr class="divider"/>'
+            : '')
+          +'<div class="total-row"><span class="total-lbl">ยอดสุทธิ</span><span class="total-val">'+baht(inv.amount)+'</span></div>'
+        +'</div>'
+        +'<div class="stamp-wrap"><span class="stamp">✓ ชำระแล้ว</span></div>'
+      +'</div>'
+      +'<div class="footer">'+esc(schoolName)+' · ขอบคุณที่ใช้บริการ</div>'
+      +'</div>'
+      +'<script>document.fonts.ready.then(function(){ window.print(); });<\/script>'
+      +'</body></html>');
+    w.document.close();
+  };
+
+  /* build the horizontal child-switcher (only when >1 child) */
+  function switcherHtml(){
+    if(!FAM || FAM.children.length < 2) return '';
+    var pills = FAM.children.map(function(c, i){
+      var st = (c.student && (c.student.nickname || c.student.name)) || '?';
+      var nm = String(st).replace(/^(น้อง|พี่)/,'').trim() || st;
+      var on = i === FAM_IDX;
+      return '<button class="kid-pill'+(on?' on':'')+'" onclick="selectChild('+i+')">'+
+             '<span class="kid-pill-av">'+esc(nm[0]||'?')+'</span>'+esc(nm)+'</button>';
+    }).join('');
+    return '<div class="kid-switch">'+
+             '<div class="kid-switch-label">👨‍👩‍👧 บุตรหลาน '+FAM.children.length+' คน</div>'+
+             '<div class="kid-pills">'+pills+'</div>'+
+           '</div>';
+  }
+
+  function render(d){
+    var s = d.student || {};
+    var rem = (d.sessions && d.sessions.remaining) || 0;
+    var tot = (d.sessions && d.sessions.total) || 0;
+    var pct = tot > 0 ? Math.max(4, Math.min(100, Math.round(rem/tot*100))) : 0;
+    var low = rem > 0 && rem <= 2;
+    var displayName = s.nickname || s.name || '';
+    var initial = displayName.replace(/^(น้อง|พี่)/,'').trim()[0] || displayName[0] || '?';
+
+    var html = '';
+
+    /* ── HEADER ── */
+    html += '<div class="head">';
+    html += '<div class="brand">'+logoSvg+' <span>'+esc(d.school)+'</span></div>';
+    html += '<div class="sess-row">';
+    html += '<div class="stu-avatar">'+esc(initial)+'</div>';
+    html += '<div class="stu-info">';
+    html += '<div class="stu-name">'+esc(displayName)+'</div>';
+    if(s.nickname) html += '<div class="stu-sub">'+esc(s.name)+'</div>';
+    if(d.categories && d.categories.length){
+      html += '<div class="chips">'+d.categories.map(function(c){ return '<span class="chip">'+(CAT_LABEL[c]||esc(c))+'</span>'; }).join('')+'</div>';
+    }
+    html += '</div></div>';
+    html += '</div>'; /* /head */
+
+    html += '<div class="wrap">';
+
+    /* ── CHILD SWITCHER (multi-child families) ── */
+    html += switcherHtml();
+
+    /* ── UNPAID INVOICES ALERT + QR + SLIP UPLOAD ── */
+    var balance = d.balance_due || 0;
+    var invUnpaid = d.invoices_unpaid || [];
+    var qrImg = FAM ? FAM.payment_qr_image : null;
+    var childToken = d.token || token; // parent_token scoped to this child
+
+    if(balance > 0){
+      html += '<div class="alert-card danger">';
+      html += '<div class="alert-icon">💳</div>';
+      html += '<div class="alert-body">';
+      html += '<div class="alert-title">มียอดค้างชำระ</div>';
+      html += '<div class="alert-amount">'+baht(balance)+'</div>';
+      if(!qrImg) html += '<div class="alert-sub">กรุณาติดต่อโรงเรียนเพื่อชำระค่าเรียน</div>';
+      html += '</div></div>';
+    }
+
+    /* ── QR Code payment card (only when school has uploaded one AND there's something to pay) ── */
+    if(balance > 0 && qrImg){
+      html += '<div class="qr-card">';
+      html += '<div class="qr-title">💳 ชำระค่าเรียน</div>';
+      html += '<div class="qr-sub">สแกน QR Code เพื่อโอนเงิน จากนั้นกด "แนบสลิป"</div>';
+      html += '<img src="'+esc(qrImg)+'" alt="QR Code รับเงิน"/>';
+
+      if(invUnpaid.length){
+        html += '<div style="margin-top:8px;text-align:left">';
+        invUnpaid.forEach(function(inv){
+          html += '<div class="inv-row">';
+          html += '<div><div class="inv-amount">'+baht(inv.amount)+'</div>';
+          html += '<div class="inv-date">ออกบิล '+fmtDate(inv.issued_at)+'</div></div>';
+          if(inv.status === 'pending_verification'){
+            html += '<span class="slip-sent">✓ ส่งสลิปแล้ว · รอตรวจสอบ</span>';
+          } else {
+            /* hidden file input + visible button */
+            html += '<div>';
+            html += '<input type="file" accept="image/*" capture="environment" style="display:none"'
+                  + ' id="slip-input-'+inv.id+'"'
+                  + ' onchange="onSlipFile('+inv.id+',\''+esc(childToken)+'\',this)">';
+            html += '<button class="btn-slip" id="slip-btn-'+inv.id+'"'
+                  + ' onclick="document.getElementById(\'slip-input-'+inv.id+'\').click()">📸 แนบสลิป</button>';
+            html += '</div>';
+          }
+          html += '</div>';
+        });
+        html += '</div>';
+      } else {
+        html += '<div style="font-size:13px;color:var(--muted);margin-top:8px">โอนเงินแล้วกรุณาแจ้งโรงเรียนเพื่อยืนยัน</div>';
+      }
+      html += '</div>'; /* /qr-card */
+    }
+
+    /* ── PAID RECEIPTS ── */
+    var invPaid = d.invoices_paid || [];
+    if(invPaid.length){
+      html += '<div class="card">';
+      html += '<div class="card-title"><span class="icon">🧾</span>ใบเสร็จการชำระ</div>';
+      invPaid.forEach(function(inv){
+        html += '<div class="inv-row">';
+        html += '<div>';
+        html += '<div class="inv-amount">'+baht(inv.amount)+'</div>';
+        html += '<div class="inv-date">'+(inv.course ? esc(inv.course)+' · ' : '')+fmtDate(inv.paid_at||inv.issued_at)+'</div>';
+        html += '</div>';
+        html += '<button onclick="window.printParentReceipt('+inv.id+')" class="btn-slip" style="background:transparent;border:1.5px solid var(--teal);color:var(--teal);font-size:13px;padding:6px 12px">🖨 PDF</button>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    /* ── SESSIONS REMAINING ── */
+    var bycat = (d.sessions && d.sessions.by_category) || [];
+    html += '<div class="card">';
+    html += '<div class="card-title"><span class="icon">📚</span>คาบเรียนคงเหลือ</div>';
+    if(bycat.length > 1){
+      /* multi-subject: show per-category bars */
+      bycat.forEach(function(bc){
+        var catLow = bc.remaining > 0 && bc.remaining <= 2;
+        var catPct = bc.total > 0 ? Math.max(4, Math.min(100, Math.round(bc.remaining/bc.total*100))) : 0;
+        var catLabel = CAT_LABEL[bc.category] || bc.category || 'ทั่วไป';
+        if(bc.round && bc.round > 1) catLabel += ' · คอร์สที่ '+bc.round;
+        html += '<div class="cat-sess-row">';
+        html += '<span class="cat-sess-label">'+esc(catLabel)+'</span>';
+        html += '<div class="cat-bar"><i class="'+(catLow?'cat-bar-low':'cat-bar-ok')+'" style="width:'+catPct+'%"></i></div>';
+        html += '<span class="cat-sess-nums">'+bc.remaining+'/'+bc.total+'</span>';
+        html += '</div>';
+      });
+      /* summary total */
+      html += '<div style="border-top:1px solid #eef2f1;margin-top:10px;padding-top:10px;display:flex;justify-content:space-between;align-items:center">';
+      html += '<span style="font-size:13px;color:var(--muted)">รวมทั้งหมด</span>';
+      html += '<span style="font-size:15px;font-weight:700;color:'+(low?'var(--red)':'var(--teal)')+'">'+rem+' / '+tot+' คาบ</span>';
+      html += '</div>';
+      if(low) html += '<div class="sess-warn">⚠️ คาบบางวิชาใกล้หมดแล้ว — ติดต่อโรงเรียนเพื่อต่อคอร์ส</div>';
+    } else {
+      /* single package: classic big-number view */
+      html += '<div style="display:flex;align-items:flex-end;gap:8px">';
+      html += '<span class="sess-big'+(low?' low':'')+'">'+rem+'</span>';
+      html += '<span class="sess-of">/ '+tot+' คาบ</span>';
+      html += '</div>';
+      html += '<div class="bar"><i class="'+(low?'bar-low':'bar-ok')+'" style="width:'+pct+'%"></i></div>';
+      if(low) html += '<div class="sess-warn">⚠️ คาบใกล้หมดแล้ว — ติดต่อโรงเรียนเพื่อต่อคอร์ส</div>';
+    }
+    if(s.goal){
+      html += '<div class="goal-box" style="margin-top:12px">🎯 เป้าหมาย: '+esc(s.goal)+'</div>';
+    }
+    html += '</div>';
+
+    /* ── DEVELOPMENT ASSESSMENT (only when school enables it) ── */
+    var assess = d.assessments || [];
+    if(assess.length){
+      html += '<div class="card">';
+      html += '<div class="card-title"><span class="icon">📊</span>คะแนนพัฒนาการ</div>';
+      assess.forEach(function(a){
+        var scores = a.scores || {};
+        var names = Object.keys(scores);
+        if(!names.length) return;
+        var catLabel = CAT_LABEL[a.category] || a.category || 'ทั่วไป';
+        html += '<div class="assess-subj">';
+        html += '<div class="assess-subj-head"><span class="assess-subj-name">'+esc(catLabel)+'</span><span class="assess-date">'+fmtDate(a.date)+'</span></div>';
+        names.forEach(function(n){
+          html += '<div class="assess-row"><span class="crit">'+esc(n)+'</span>'+starsHtml(scores[n])+'</div>';
+        });
+        if(a.note) html += '<div class="assess-note">📝 '+esc(a.note)+'</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    /* ── RECENT ATTENDANCE ── */
+    var att = d.attendance_recent || [];
+    html += '<div class="card">';
+    html += '<div class="card-title"><span class="icon">✅</span>การเข้าเรียนล่าสุด</div>';
+    if(att.length){
+      var ATT_MAP = {
+        present:{ emoji:'✓', cls:'present' },
+        absent: { emoji:'✗', cls:'absent'  },
+        leave:  { emoji:'~', cls:'leave'   },
+      };
+      /* show as 5-column grid */
+      html += '<div class="att-grid">';
+      att.slice(0,10).forEach(function(a){
+        var info = ATT_MAP[a.status] || { emoji:'?', cls:'unknown' };
+        html += '<div class="att-cell">';
+        html += '<div class="att-dot '+info.cls+'"><b>'+info.emoji+'</b></div>';
+        html += '<div class="att-date">'+fmtDate(a.date)+'</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+      /* legend */
+      html += '<div class="att-legend">';
+      html += '<span><i class="leg-dot" style="background:#16a34a"></i>มาเรียน</span>';
+      html += '<span><i class="leg-dot" style="background:#e53e3e"></i>ขาดเรียน</span>';
+      html += '<span><i class="leg-dot" style="background:#d97706"></i>ลา</span>';
+      html += '</div>';
+    } else {
+      html += '<div class="empty">— ยังไม่มีประวัติการเข้าเรียน —</div>';
+    }
+    html += '</div>';
+
+    /* ── SCHEDULE ── */
+    html += '<div class="card">';
+    html += '<div class="card-title"><span class="icon">📅</span>ตารางเรียนประจำสัปดาห์</div>';
+    if(d.schedule && d.schedule.length){
+      html += d.schedule.map(function(sl){
+        var cat = CAT_LABEL[sl.category] || sl.category || '';
+        return '<div class="sched-row">'+
+          '<div class="day-pill"><b>'+esc(sl.day)+'</b><span>'+esc(sl.start)+'</span></div>'+
+          '<div class="sched-main"><b>'+esc(sl.teacher)+'</b>'+
+          '<span>'+(cat?cat+' · ':'')+esc(sl.start)+' – '+esc(sl.end)+' น.</span></div>'+
+          '</div>';
+      }).join('');
+    } else {
+      html += '<div class="empty">— ยังไม่มีตารางเรียน —</div>';
+    }
+    html += '</div>';
+
+    /* ── HOMEWORK ── */
+    html += '<div class="card">';
+    html += '<div class="card-title"><span class="icon">📝</span>การบ้าน</div>';
+    if(d.homework && d.homework.length){
+      var ST = {
+        done:   { t:'ส่งแล้ว',      c:'#0a6a60', b:'#d6f0ec' },
+        pending:{ t:'รอส่ง',        c:'#b7791f', b:'#fdf0d5' },
+        overdue:{ t:'เกินกำหนด',    c:'#c0392b', b:'#fbe3e0' },
+      };
+      html += d.homework.map(function(h){
+        var st = ST[h.status] || ST.pending;
+        return '<div class="hw-row">'+
+          '<div class="hw-dot" style="background:'+st.c+'"></div>'+
+          '<div class="hw-main"><b>'+esc(h.title)+'</b>'+
+          (h.detail?'<p>'+esc(h.detail)+'</p>':'')+
+          (h.due_date?'<p>กำหนดส่ง: '+fmtDate(h.due_date)+'</p>':'')+'</div>'+
+          '<span class="hw-status" style="color:'+st.c+';background:'+st.b+'">'+st.t+'</span>'+
+          '</div>';
+      }).join('');
+    } else {
+      html += '<div class="empty">— ยังไม่มีการบ้าน —</div>';
+    }
+    html += '</div>';
+
+    html += '<div class="foot">ข้อมูลจาก skooldee · อัปเดตอัตโนมัติ<br/>สอบถามเพิ่มเติมติดต่อทางโรงเรียนโดยตรง</div>';
+    html += '</div>'; /* /wrap */
+
+    screen(html);
+    document.title = displayName + ' · ' + esc(d.school);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="robots" content="noindex"/>
+<title>สมัครเรียน · skooldee</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --teal:#0D9488; --teal-soft:#d6f0ec; --teal-dk:#0a7a70;
+    --orange:#F59E0B; --orange-soft:#fef3c7;
+    --ink:#1a2b29; --ink-2:#4b6360; --ink-3:#8aa49e;
+    --line:#e5ecea; --bg:#f0f5f4; --white:#fff;
+    --radius:16px; --radius-sm:10px;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:'Sarabun',sans-serif; background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased; }
+  .wrap{ max-width:500px; margin:0 auto; padding-bottom:48px; }
+
+  /* header */
+  .hdr{ background:linear-gradient(140deg,#0a7a70,var(--teal) 55%,#11a393); color:#fff; padding:28px 22px 32px; border-radius:0 0 28px 28px; text-align:center; }
+  .hdr-logo{ width:72px; height:72px; object-fit:contain; border-radius:14px; display:block; margin:0 auto 10px; }
+  .hdr-av{ width:72px; height:72px; background:rgba(255,255,255,.22); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:800; margin:0 auto 10px; }
+  .hdr-school{ font-size:20px; font-weight:800; margin-bottom:3px; }
+  .hdr-sub{ font-size:13px; opacity:.85; }
+  .hdr-badge{ display:inline-block; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.3); border-radius:99px; padding:3px 14px; font-size:12px; margin-top:10px; }
+
+  /* card / form */
+  .card{ background:var(--white); border-radius:var(--radius); padding:22px 20px; margin:16px 14px 0; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  .card-title{ font-size:16px; font-weight:700; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+  .field{ margin-bottom:16px; }
+  .field label{ display:block; font-size:13.5px; font-weight:600; margin-bottom:6px; color:var(--ink-2); }
+  .field label span.req{ color:#e53e3e; margin-left:3px; }
+  .field input, .field select, .field textarea{
+    width:100%; padding:11px 14px; border:1.5px solid var(--line); border-radius:var(--radius-sm);
+    font-family:inherit; font-size:15px; color:var(--ink); background:var(--white);
+    outline:none; transition:border-color .15s; appearance:none;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{ border-color:var(--teal); }
+  .field textarea{ resize:vertical; min-height:72px; }
+  .field .hint{ font-size:12px; color:var(--ink-3); margin-top:5px; }
+  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+  /* submit button */
+  .btn-submit{ display:block; width:calc(100% - 28px); margin:18px 14px 0; padding:15px; background:var(--teal); color:#fff; font-family:inherit;
+    font-size:16px; font-weight:700; border:none; border-radius:var(--radius); cursor:pointer; transition:opacity .15s; }
+  .btn-submit:hover{ opacity:.9; }
+  .btn-submit:disabled{ opacity:.6; cursor:not-allowed; }
+
+  /* states */
+  .state{ text-align:center; padding:60px 24px; color:var(--ink-3); }
+  .state .big{ font-size:52px; margin-bottom:14px; }
+  .state h2{ font-size:20px; font-weight:700; color:var(--ink); margin-bottom:8px; }
+  .state p{ font-size:14px; line-height:1.6; }
+
+  /* success */
+  .success{ background:var(--white); border-radius:var(--radius); padding:32px 24px; margin:24px 14px 0; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  .success .icon{ font-size:52px; margin-bottom:16px; }
+  .success h2{ font-size:20px; font-weight:800; margin-bottom:8px; }
+  .success p{ font-size:14px; color:var(--ink-2); line-height:1.7; margin-bottom:16px; }
+  .success .contact-row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:8px; }
+  .contact-btn{ display:inline-flex; align-items:center; gap:7px; padding:10px 18px; border-radius:10px; font-size:14px; font-weight:600; text-decoration:none; cursor:pointer; }
+  .contact-btn.line{ background:#06c755; color:#fff; }
+  .contact-btn.phone{ background:var(--teal-soft); color:var(--teal-dk); border:1.5px solid var(--teal); }
+
+  /* skeleton */
+  .skel{ height:56px; border-radius:var(--radius-sm); background:linear-gradient(90deg,#edf2f1,#f5f7f6,#edf2f1);
+    background-size:200% 100%; animation:sh 1.3s infinite; margin-bottom:14px; }
+  @keyframes sh{ 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  .foot{ text-align:center; font-size:12px; color:var(--ink-3); padding:24px 16px; }
+  .foot a{ color:var(--teal); text-decoration:none; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="hdr"><div class="hdr-av">⏳</div><div class="hdr-school">กำลังโหลด…</div></div>
+  <div class="card"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+</div>
+
+<script>
+var API_BASE = 'https://skooldee-api-production.up.railway.app';
+
+function qp(k){ return new URLSearchParams(location.search).get(k); }
+var slug = qp('school') || location.pathname.replace(/\/join\/?$/, '').split('/').filter(Boolean).shift() || '';
+
+var SCHOOL = null;
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+function showState(html){ document.getElementById('root').innerHTML = html; }
+
+function showError(msg){
+  showState(
+    '<div class="hdr"><div class="hdr-av">🔍</div><div class="hdr-school">ไม่พบโรงเรียน</div></div>'
+    +'<div class="state"><div class="big">😕</div><h2>ลิงก์ไม่ถูกต้อง</h2><p>'+(msg||'กรุณาขอลิงก์สมัครเรียนจากทางโรงเรียนอีกครั้งค่ะ')+'</p></div>'
+    +'<div class="foot">ขับเคลื่อนโดย <a href="https://skooldee.com">skooldee</a></div>'
+  );
+}
+
+function buildHdr(school){
+  var logo = school.logo_image
+    ? '<img class="hdr-logo" src="'+esc(school.logo_image)+'" alt="โลโก้"/>'
+    : '<div class="hdr-av">'+esc((school.name||'S')[0].toUpperCase())+'</div>';
+  return '<div class="hdr">'
+    + logo
+    + '<div class="hdr-school">'+esc(school.name||'โรงเรียน')+'</div>'
+    + (school.category ? '<div class="hdr-sub">'+esc(school.category)+'</div>' : '')
+    + '<div class="hdr-badge">📝 สมัครเรียน</div>'
+    + '</div>';
+}
+
+function renderForm(school){
+  SCHOOL = school;
+  document.title = 'สมัครเรียน · '+esc(school.name||'skooldee');
+
+  var catOpts = (school.categories||[]).map(function(c){
+    return '<option value="'+esc(c.key)+'">'+esc(c.label)+'</option>';
+  }).join('');
+
+  var html = buildHdr(school)
+    + '<div class="card">'
+    + '<div class="card-title">📋 กรอกข้อมูลสมัครเรียน</div>'
+    + '<form id="enroll-form" onsubmit="submitForm(event)">'
+
+    + '<div class="field-row">'
+    + '<div class="field"><label>ชื่อ-นามสกุลนักเรียน<span class="req">*</span></label>'
+    + '<input type="text" id="f-student" placeholder="เช่น น้องมาลี สุขเจริญ" required maxlength="100"/></div>'
+    + '<div class="field"><label>ชื่อผู้ปกครอง</label>'
+    + '<input type="text" id="f-parent" placeholder="เช่น คุณแม่มาลา" maxlength="100"/></div>'
+    + '</div>'
+
+    + '<div class="field-row">'
+    + '<div class="field"><label>เบอร์โทรศัพท์<span class="req">*</span></label>'
+    + '<input type="tel" id="f-phone" placeholder="081-234-5678" required maxlength="20"/></div>'
+    + '<div class="field"><label>LINE ID (ถ้ามี)</label>'
+    + '<input type="text" id="f-line" placeholder="@lineid" maxlength="60"/></div>'
+    + '</div>'
+
+    + (catOpts ? '<div class="field"><label>วิชา / คอร์สที่สนใจ<span class="req">*</span></label>'
+    + '<select id="f-cat" required><option value="">-- เลือกวิชา --</option>'+catOpts+'</select></div>' : '')
+
+    + '<div class="field"><label>ข้อความเพิ่มเติม</label>'
+    + '<textarea id="f-note" placeholder="เช่น วัน-เวลาที่สะดวก, อายุนักเรียน, ระดับความสามารถ หรืออื่นๆ" maxlength="500"></textarea>'
+    + '<div class="hint">ไม่บังคับ · สามารถระบุวัน/เวลาที่สะดวก หรือข้อมูลเพิ่มเติมได้</div></div>'
+
+    + '<div id="form-err" style="display:none;background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:13.5px;margin-top:2px"></div>'
+    + '</form></div>'
+
+    + '<button class="btn-submit" id="btn-submit" onclick="submitForm(event)">ส่งใบสมัคร 📨</button>'
+
+    + '<div class="foot">ข้อมูลนี้จะส่งถึง '+esc(school.name||'โรงเรียน')+' เพื่อพิจารณารับเข้าเรียน<br/>ขับเคลื่อนโดย <a href="https://skooldee.com">skooldee</a></div>';
+
+  showState(html);
+}
+
+function renderSuccess(school){
+  var html = buildHdr(school)
+    + '<div class="success">'
+    + '<div class="icon">🎉</div>'
+    + '<h2>ส่งใบสมัครแล้ว!</h2>'
+    + '<p>ขอบคุณที่สนใจเรียนกับ <b>'+esc(school.name||'เรา')+'</b><br/>'
+    + 'เจ้าหน้าที่จะติดต่อกลับภายใน 1-2 วันทำการ</p>'
+    + '<div class="contact-row">'
+    + (school.line_oa_url ? '<a class="contact-btn line" href="'+esc(school.line_oa_url)+'">💬 ทักแชท LINE</a>' : '')
+    + (school.contact_phone ? '<a class="contact-btn phone" href="tel:'+esc(school.contact_phone)+'">📞 '+esc(school.contact_phone)+'</a>' : '')
+    + '</div></div>'
+    + '<div class="foot">ขับเคลื่อนโดย <a href="https://skooldee.com">skooldee</a></div>';
+  showState(html);
+}
+
+function submitForm(e){
+  if(e) e.preventDefault();
+  var errEl = document.getElementById('form-err');
+  var btn = document.getElementById('btn-submit');
+  if(errEl) errEl.style.display='none';
+
+  var studentName = (document.getElementById('f-student')||{}).value || '';
+  var parentName  = (document.getElementById('f-parent')||{}).value  || '';
+  var phone       = (document.getElementById('f-phone')||{}).value   || '';
+  var lineId      = (document.getElementById('f-line')||{}).value    || '';
+  var category    = (document.getElementById('f-cat')||{}).value     || '';
+  var note        = (document.getElementById('f-note')||{}).value    || '';
+
+  if(!studentName.trim()){ showFieldErr('กรุณากรอกชื่อนักเรียน'); return; }
+  if(!phone.trim()){ showFieldErr('กรุณากรอกเบอร์โทรศัพท์'); return; }
+
+  if(btn){ btn.disabled=true; btn.textContent='กำลังส่ง…'; }
+
+  fetch(API_BASE+'/api/public/enroll', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ slug:slug, student_name:studentName.trim(), parent_name:parentName.trim(),
+      phone:phone.trim(), line_id:lineId.trim(), category:category, note:note.trim() }),
+  })
+  .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||'ส่งไม่สำเร็จ'); return j; }); })
+  .then(function(){ renderSuccess(SCHOOL||{}); })
+  .catch(function(err){
+    showFieldErr(err.message||'เกิดข้อผิดพลาด กรุณาลองใหม่');
+    if(btn){ btn.disabled=false; btn.textContent='ส่งใบสมัคร 📨'; }
+  });
+}
+
+function showFieldErr(msg){
+  var el = document.getElementById('form-err');
+  if(el){ el.textContent=msg; el.style.display='block'; }
+}
+
+window.submitForm = submitForm;
+
+if(!slug){ showError('ไม่พบ URL ของโรงเรียน'); }
+else {
+  fetch(API_BASE+'/api/public/school/'+encodeURIComponent(slug))
+    .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+    .then(renderForm)
+    .catch(function(){ showError('ไม่พบโรงเรียนนี้ในระบบ'); });
+}
+</script>
+</body>
+</html>

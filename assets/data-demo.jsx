@@ -104,15 +104,35 @@ function updateStudent(id, patch){
 }
 const findStudent = (name)=> STUDENTS.find(s=> s.name===name);
 
+// display-name helper: returns nickname or full name based on the school's NAME_DISPLAY setting.
+// Accepts a student object OR a full-name string (looks it up in the CURRENT students list).
+let NAME_DISPLAY = 'full';
+function setNameDisplay(m){ NAME_DISPLAY = (m==='nick'||m==='both') ? m : 'full'; }
+function dispName(x){
+  var s = (x && typeof x==='object') ? x
+        : ((window.DATA && window.DATA.STUDENTS) || STUDENTS).find(function(st){ return st.name===x || st.full===x; });
+  if(!s) return (typeof x==='string') ? x : '-';
+  var mode = (window.DATA && window.DATA.NAME_DISPLAY) || NAME_DISPLAY;
+  var full = s.name||s.full||'-';
+  if(mode==='nick' && s.nickname) return s.nickname;
+  if(mode==='both' && s.nickname) return full+' ('+s.nickname+')';
+  return full;
+}
+
 let NEAR_LIMIT = 2;
 function setNearLimit(n){ NEAR_LIMIT = n; }
 const isNearEnding = (s)=> s.status==="active" && s.remaining<=NEAR_LIMIT;
 
 const STATUS = {
-  active: { label:"กำลังเรียน", color:"var(--ok)",      soft:"var(--ok-soft)" },
-  trial:  { label:"ทดลองเรียน", color:"var(--warn)",    soft:"var(--warn-soft)" },
-  paused: { label:"พักเรียน",   color:"var(--text-3)",  soft:"var(--surface-3)" },
+  lead:            { label:"สนใจ",            color:"var(--c-piano)",  soft:"var(--c-piano-soft)" },
+  trial_scheduled: { label:"นัดทดลองเรียน",   color:"var(--c-dance)",  soft:"var(--c-dance-soft)" },
+  trial_done:      { label:"ทดลองเรียนแล้ว",  color:"var(--c-sing)",   soft:"var(--c-sing-soft)" },
+  active:          { label:"กำลังเรียน",       color:"var(--ok)",       soft:"var(--ok-soft)" },
+  trial:           { label:"ทดลองเรียน",       color:"var(--warn)",     soft:"var(--warn-soft)" },
+  paused:          { label:"พักเรียน",         color:"var(--text-3)",   soft:"var(--surface-3)" },
 };
+// pipeline funnel order (subset of STATUS used as sales stages)
+const PIPELINE_STAGES = ['lead','trial_scheduled','trial_done','active'];
 
 const DAYS = [
   {d:"จันทร์", short:"จ", n:"1"}, {d:"อังคาร", short:"อ", n:"2"}, {d:"พุธ", short:"พ", n:"3"},
@@ -189,9 +209,10 @@ const INVOICES = [
 ];
 
 const PAY_STATUS = {
-  paid:    { label:"ชำระแล้ว",  color:"var(--ok)",     soft:"var(--ok-soft)" },
-  pending: { label:"รอชำระ",    color:"var(--warn)",   soft:"var(--warn-soft)" },
-  overdue: { label:"เกินกำหนด", color:"var(--danger)", soft:"var(--danger-soft)" },
+  paid:                 { label:"ชำระแล้ว",    color:"var(--ok)",     soft:"var(--ok-soft)"   },
+  pending:              { label:"รอชำระ",       color:"var(--warn)",   soft:"var(--warn-soft)" },
+  pending_verification: { label:"รอตรวจสลิป",  color:"#7c3aed",       soft:"#ede9fe"          },
+  overdue:              { label:"เกินกำหนด",   color:"var(--danger)", soft:"var(--danger-soft)"},
 };
 
 const REVENUE = [
@@ -268,9 +289,36 @@ function refStats(name){
     earned:mine.filter(r=>r.rewarded).length*REF_REWARD };
 }
 
+/* demo-mode reward points: floor at 0, mirror the live API shape ({ points }) */
+function givePoints(id, delta, _reason){
+  const s = STUDENTS.find(x=>x.id===id); if(!s) return Promise.resolve(null);
+  s.points = Math.max(0, (s.points||0) + (Math.trunc(Number(delta))||0));
+  updateStudent(id, { points: s.points });
+  return Promise.resolve({ id, name:s.name, points:s.points });
+}
+
+/* demo-mode development assessments — kept in localStorage, mirror live API shapes */
+let __ASSESS = (()=>{ try{ return JSON.parse(localStorage.getItem(PFX+"assess")||"{}"); }catch(e){ return {}; } })();
+function __persistAssess(){ try{ localStorage.setItem(PFX+"assess", JSON.stringify(__ASSESS)); }catch(e){} }
+function listAssessments(studentId){
+  return Promise.resolve(((__ASSESS[studentId]||[]).slice()).sort((a,b)=> a.date<b.date?1:-1));
+}
+function addAssessment(studentId, payload){
+  const rec = { id:'a'+Date.now(), category:payload.category||null, date:payload.date,
+    scores:payload.scores||{}, note:payload.note||null, created_at:new Date().toISOString() };
+  (__ASSESS[studentId] = __ASSESS[studentId]||[]).unshift(rec); __persistAssess();
+  return Promise.resolve(rec);
+}
+function deleteAssessment(studentId, id){
+  if(__ASSESS[studentId]) __ASSESS[studentId] = __ASSESS[studentId].filter(a=>a.id!==id);
+  __persistAssess(); return Promise.resolve({ ok:true });
+}
+
 window.DATA = { SCHOOL, CATS, TEACHERS, TEACHER_BY_CAT, COURSES, STUDENTS, STATUS, DAYS, SCHEDULE, layoutDay,
   DAY_START, DAY_END, PX_PER_MIN, toMin, SLOT_TIMES, TODAY, INVOICES, PAY_STATUS, REVENUE, baht,
   PACKAGES_DEFAULT, loadPackages, savePackagePrice, NEAR_LIMIT, isNearEnding,
   updateStudent, findStudent, TODAY_KEY, TODAY_LABEL, ATT_STATUS, loadAttendance, saveAttendance,
-  TIERS, tierOf, NOW_KEY, HW_STATUS, HOMEWORK, addHomework, updateHomework, isOverdue, setNearLimit,
-  REF_REWARD, REF_FRIEND_BONUS, refCode, REF_STATUS, REFERRALS, addReferral, setReferralStatus, refStats };
+  TIERS, tierOf, givePoints, ASSESS_CRITERIA:{}, SHOW_ASSESS_PARENTS:false, SHOW_COURSE_NO_PARENTS:false, PAYMENT_QR_IMAGE:null, SCHOOL_LOGO:null, ENROLLMENTS:[],
+  listAssessments, addAssessment, deleteAssessment, NOW_KEY, HW_STATUS, HOMEWORK, addHomework, updateHomework, isOverdue, setNearLimit,
+  REF_REWARD, REF_FRIEND_BONUS, refCode, REF_STATUS, REFERRALS, addReferral, setReferralStatus, refStats,
+  NAME_DISPLAY, setNameDisplay, dispName, PIPELINE_STAGES };
