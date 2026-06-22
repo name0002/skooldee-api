@@ -21,3 +21,6 @@ Thumbs.db
 
 # Temp
 _cap/
+
+# Cloudflare Pages publish dir (built by scripts/build-pages.mjs)
+dist/

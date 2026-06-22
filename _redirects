@@ -1,3 +1,10 @@
+# SECURITY: hard-block any server/build paths. The build (scripts/build-pages.mjs)
+# already excludes these from the deployment, so they don't physically exist — but
+# these rules guarantee a 404 (instead of the SPA 200 fallback) even if something
+# slips through. Keep them FIRST so they win over the rewrites below.
+/server/*    /404.html  404
+/scripts/*   /404.html  404
+
 # /app and /app.html are both served by Cloudflare Pages clean-URL feature.
 # Do NOT add a redirect for /app → /app.html here — it creates a redirect loop.
 
