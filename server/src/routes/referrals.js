@@ -35,7 +35,7 @@ r.patch('/:id', wrap((req, res) => {
   if (status === 'subscribed' && ref.status !== 'subscribed') {
     run('UPDATE referrals SET status = ?, referrer_reward = ?, friend_reward = ? WHERE id = ?',
       status, REFERRER_REWARD, FRIEND_REWARD, ref.id);
-    run('UPDATE students SET points = points + ? WHERE id = ?', REFERRER_REWARD, ref.referrer_student_id);
+    run('UPDATE students SET points = points + ? WHERE id = ? AND school_id = ?', REFERRER_REWARD, ref.referrer_student_id, req.schoolId);
     run('INSERT INTO points_ledger (school_id, student_id, delta, reason) VALUES (?,?,?,?)',
       req.schoolId, ref.referrer_student_id, REFERRER_REWARD, `แนะนำเพื่อน: ${ref.friend_name}`);
   } else {

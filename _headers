@@ -4,6 +4,11 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
 
+# JS/JSX bundles share stable filenames (no content hash), so they must always
+# revalidate — otherwise a fresh app.jsx can pair with a stale cached api.js and crash the app.
+/assets/*
+  Cache-Control: public, max-age=0, must-revalidate
+
 /demo.html
   X-Robots-Tag: noindex
 

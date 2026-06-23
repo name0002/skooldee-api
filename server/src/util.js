@@ -1,13 +1,23 @@
 // Small helpers shared by routes.
 
+// Turn a thrown error into a clean 4xx/5xx JSON response.
+function sendError(res, err) {
+  if (res.headersSent) return; // a response already went out — nothing safe to do
+  const status = err.status || 500;
+  if (status >= 500) console.error(err);
+  res.status(status).json({ error: err.message || 'server error' });
+}
+
 // Wrap an (req,res) handler so thrown errors become clean 400/500 responses.
+// Handles BOTH sync handlers and async handlers: an async handler returns a
+// promise, so we must also attach a .catch — otherwise a throw after the first
+// await becomes an unhandled rejection (no response sent + can crash the process).
 export const wrap = (fn) => (req, res) => {
   try {
-    fn(req, res);
+    const out = fn(req, res);
+    if (out && typeof out.then === 'function') out.catch((err) => sendError(res, err));
   } catch (err) {
-    const status = err.status || 500;
-    if (status >= 500) console.error(err);
-    res.status(status).json({ error: err.message || 'server error' });
+    sendError(res, err);
   }
 };
 

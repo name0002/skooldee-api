@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { wrap, required } from '../util.js';
+import { get, run } from '../db.js';
 
 const r = Router();
 
@@ -20,19 +21,69 @@ const r = Router();
  *     body: JSON.stringify({ to: lineUserId, messages: [{ type: 'text', text: message }] }),
  *   });
  */
-r.post('/line', wrap((req, res) => {
-  const { message } = required(req.body, ['message']);
-  const configured = !!process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  if (!configured) {
+r.post('/line', wrap(async (req, res) => {
+  const { message, student_id } = required(req.body, ['message']);
+  // prefer the school's own token (set in Settings), fall back to a global env token
+  const school = get('SELECT line_token FROM schools WHERE id = ?', req.schoolId);
+  const token = (school && school.line_token) || process.env.LINE_CHANNEL_ACCESS_TOKEN || null;
+
+  // resolve recipient ONLY from a student in the caller's own school — never accept a
+  // raw `to` userId from the body (that would let staff push to any LINE account).
+  let to = null;
+  if (student_id) {
+    const s = get('SELECT line_user_id FROM students WHERE id = ? AND school_id = ?', student_id, req.schoolId);
+    to = s && s.line_user_id;
+  }
+
+  if (!token) {
     return res.json({
-      sent: false,
-      simulated: true,
-      note: 'LINE not configured — set LINE_CHANNEL_ACCESS_TOKEN to send for real',
+      sent: false, simulated: true,
+      note: 'ยังไม่ได้เชื่อมต่อ LINE — ไปที่ ตั้งค่า → LINE แจ้งเตือน เพื่อใส่ Channel Access Token',
       preview: message,
     });
   }
-  // TODO: real push call here once token + parent LINE userIds are available.
-  res.json({ sent: true, preview: message });
+  // token present but this parent hasn't linked their LINE yet (no userId on file).
+  if (!to) {
+    return res.json({
+      sent: false, simulated: true, connected: true,
+      note: 'เชื่อมต่อ LINE แล้ว ✓ แต่ผู้ปกครองของนักเรียนคนนี้ยังไม่ได้เชื่อม LINE (ให้แอด Official Account แล้วส่งรหัสเชื่อมต่อ)',
+      preview: message,
+    });
+  }
+  // real push
+  try {
+    const r2 = await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ to, messages: [{ type: 'text', text: message }] }),
+    });
+    if (!r2.ok) {
+      const body = await r2.text();
+      return res.json({ sent: false, error: 'line_api_error', status: r2.status, detail: body.slice(0, 200) });
+    }
+    res.json({ sent: true, preview: message });
+  } catch (e) {
+    res.json({ sent: false, error: 'network', detail: String(e).slice(0, 200) });
+  }
+}));
+
+// POST /api/notify/line/test — verify the saved token works (calls LINE's quota endpoint)
+r.post('/line/test', wrap(async (req, res) => {
+  const school = get('SELECT line_token FROM schools WHERE id = ?', req.schoolId);
+  const token = (school && school.line_token) || process.env.LINE_CHANNEL_ACCESS_TOKEN || null;
+  if (!token) return res.json({ ok: false, note: 'ยังไม่ได้ใส่ Token' });
+  try {
+    const r2 = await fetch('https://api.line.me/v2/bot/info', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r2.ok) return res.json({ ok: false, status: r2.status, note: 'Token ไม่ถูกต้องหรือหมดอายุ' });
+    const info = await r2.json();
+    // persist the OA basic id so the app can build one-tap parent-link deep links
+    if (info.basicId) { try { run('UPDATE schools SET line_oa_basic_id = ? WHERE id = ?', info.basicId, req.schoolId); } catch { /* non-critical */ } }
+    res.json({ ok: true, bot: { displayName: info.displayName, basicId: info.basicId, pictureUrl: info.pictureUrl } });
+  } catch (e) {
+    res.json({ ok: false, note: 'เชื่อมต่อ LINE ไม่สำเร็จ', detail: String(e).slice(0, 200) });
+  }
 }));
 
 export default r;

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { all, get, run } from '../db.js';
+import { requireRole } from '../auth.js';
 import { wrap, required, bad } from '../util.js';
 
 const r = Router();
@@ -9,7 +10,8 @@ r.get('/', wrap((req, res) => {
   res.json(all('SELECT * FROM packages WHERE school_id = ? ORDER BY sort, id', req.schoolId));
 }));
 
-r.post('/', wrap((req, res) => {
+// pricing is financial — only owner/admin may create/edit/remove packages
+r.post('/', requireRole('owner', 'admin'), wrap((req, res) => {
   const b = required(req.body, ['name', 'sessions', 'duration_min', 'price']);
   const result = run(
     'INSERT INTO packages (school_id, name, sessions, duration_min, price, is_default, sort) VALUES (?,?,?,?,?,?,?)',
@@ -18,7 +20,7 @@ r.post('/', wrap((req, res) => {
 }));
 
 // PATCH /api/packages/:id — edit price (or other fields) yourself
-r.patch('/:id', wrap((req, res) => {
+r.patch('/:id', requireRole('owner', 'admin'), wrap((req, res) => {
   const p = get('SELECT * FROM packages WHERE id = ? AND school_id = ?', req.params.id, req.schoolId);
   if (!p) throw bad('package not found', 404);
   const fields = ['name', 'sessions', 'duration_min', 'price', 'is_default', 'sort'];
@@ -29,7 +31,7 @@ r.patch('/:id', wrap((req, res) => {
   res.json(get('SELECT * FROM packages WHERE id = ?', p.id));
 }));
 
-r.delete('/:id', wrap((req, res) => {
+r.delete('/:id', requireRole('owner', 'admin'), wrap((req, res) => {
   const result = run('DELETE FROM packages WHERE id = ? AND school_id = ?', req.params.id, req.schoolId);
   if (!result.changes) throw bad('package not found', 404);
   res.json({ ok: true });
