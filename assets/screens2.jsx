@@ -547,12 +547,11 @@ function StudentDrawer({ s, onClose }){
                     </select>
                   </div>
                   <div style={{flex:'2 1 140px'}}>
-                    {i===0 && <div style={{fontSize:11,color:'var(--text-3)',marginBottom:3}}>แพ็กเกจ</div>}
-                    <select value={e.package_id?String(e.package_id):('n'+e.sessions)} onChange={ev=>onEEPkg(i,ev.target.value)}>
-                      {eePkgs.length ? eePkgs.map(p=>{ const pid=String(p._dbId||p.id); const d=p.duration_min||p.dur||60; const durL=d===60?'1ชม.':d===30?'30น.':`${d}น.`;
-                        return <option key={pid} value={pid}>{(p.name||`คอร์ส ${p.sessions} ครั้ง`)} · {p.sessions} ครั้ง · {durL}</option>; })
-                        : <><option value="n4">4 ครั้ง</option><option value="n10">10 ครั้ง</option></>}
-                    </select>
+                    {i===0 && <div style={{fontSize:11,color:'var(--text-3)',marginBottom:3}}>จำนวนครั้ง (รวม)</div>}
+                    <input type="number" value={e.sessions} min={1} max={999} onChange={ev=>{
+                      const n=Math.max(1,Number(ev.target.value)||1);
+                      setEE(i,{package_id:null,sessions:n,remaining:Math.min(e.remaining,n)});
+                    }}/>
                   </div>
                   <div style={{flex:'0 0 70px'}}>
                     {i===0 && <div style={{fontSize:11,color:'var(--text-3)',marginBottom:3}}>คงเหลือ</div>}
@@ -1265,14 +1264,11 @@ function AddStudentDrawer({ onClose, onSaved }){
                 </select>
               </div>
               <div style={{flex:'2 1 150px'}}>
-                {i===0 && <div style={{fontSize:11,color:'var(--text-3)',marginBottom:3}}>แพ็กเกจ</div>}
-                <select value={e.package_id?String(e.package_id):('n'+e.sessions)} onChange={ev=>onEnrollPkg(i,ev.target.value)}>
-                  {pkgs.length ? pkgs.map(p=>{
-                    const pid=String(p._dbId||p.id); const d=p.duration_min||p.dur||60;
-                    const durL=d===60?'1ชม.':d===30?'30น.':`${d}น.`;
-                    return <option key={pid} value={pid}>{(p.name||`คอร์ส ${p.sessions} ครั้ง`)} · {p.sessions} ครั้ง · {durL}{p.price?` · ฿${p.price.toLocaleString()}`:''}</option>;
-                  }) : <><option value="n4">4 ครั้ง</option><option value="n10">10 ครั้ง</option><option value="n20">20 ครั้ง</option></>}
-                </select>
+                {i===0 && <div style={{fontSize:11,color:'var(--text-3)',marginBottom:3}}>จำนวนครั้ง (รวม)</div>}
+                <input type="number" value={e.sessions} min={1} max={999} onChange={ev=>{
+                  const n=Math.max(1,Number(ev.target.value)||1);
+                  setEnroll(i,{package_id:null,sessions:n,remaining:Math.min(e.remaining,n)});
+                }}/>
               </div>
               <div style={{flex:'0 0 78px'}}>
                 {i===0 && <div style={{fontSize:11,color:'var(--text-3)',marginBottom:3}}>คงเหลือ</div>}

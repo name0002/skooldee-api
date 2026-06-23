@@ -102,7 +102,10 @@ function updateStudent(id, patch){
   ov[id] = Object.assign(ov[id]||{}, patch);
   localStorage.setItem(PFX+"students", JSON.stringify(ov));
 }
-const findStudent = (name)=> STUDENTS.find(s=> s.name===name);
+// IMPORTANT: read from the LIVE list (window.DATA.STUDENTS gets REASSIGNED in live mode),
+// not the demo-seed `STUDENTS` const this closure was created over — otherwise lookups
+// silently miss every real student (e.g. LINE send → "ยังไม่เชื่อม" though the parent IS linked).
+const findStudent = (name)=> ((window.DATA && window.DATA.STUDENTS) || STUDENTS).find(s=> s.name===name);
 
 // display-name helper: returns nickname or full name based on the school's NAME_DISPLAY setting.
 // Accepts a student object OR a full-name string (looks it up in the CURRENT students list).

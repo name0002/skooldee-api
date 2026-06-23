@@ -49,11 +49,12 @@ function Homework(){
 
       <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
         {list.map(h=>{
-          const cat = DATA.CATS[h.cat];
+          // category may be missing/renamed → fall back to a neutral grey so the page never crashes
+          const cat = DATA.CATS[h.cat] || { color:"var(--text-3)", label:"" };
           const over = DATA.isOverdue(h);
           const done = h.status==="done";
           return (
-            <div key={h.id} className="card" style={{ padding:"15px 18px", display:"flex", alignItems:"center", gap:14, borderLeft:`3px solid ${cat.color}`, opacity: done?0.72:1 }}>
+            <div key={h.id} className="card hw-card" style={{ padding:"15px 18px", display:"flex", alignItems:"center", gap:14, borderLeft:`3px solid ${cat.color}`, opacity: done?0.72:1 }}>
               <Avatar name={h.student} size={42}/>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:9, rowGap:5, flexWrap:"wrap", lineHeight:1.3 }}>
@@ -61,7 +62,7 @@ function Homework(){
                   <CatBadge cat={h.cat} small/>
                   {h.notified && <span className="badge" style={{ background:"color-mix(in oklch,#06c755 14%,white)", color:"#057a3e", fontSize:11 }}><Icon n="check" size={12}/> แจ้งแล้ว</span>}
                 </div>
-                <div style={{ fontSize:13, color:"var(--text-2)", marginTop:5 }}>{h.student} · {h.teacher}{h.detail&&h.detail!=="-"?` · ${h.detail}`:""}</div>
+                <div style={{ fontSize:13, color:"var(--text-2)", marginTop:5 }}>{DATA.dispName(h.student)} · {h.teacher}{h.detail&&h.detail!=="-"?` · ${h.detail}`:""}</div>
                 <div style={{ fontSize:12.5, marginTop:4, color: over?"var(--danger)":"var(--text-3)", fontWeight: over?700:400 }}>
                   <Icon n="clock" size={13}/> ส่งภายใน {h.due}{over?" · เกินกำหนด":""}
                 </div>
@@ -72,6 +73,10 @@ function Homework(){
                 <button className={"btn btn-sm "+(done?"btn-ghost":"btn-soft")} onClick={()=>toggleDone(h)}>
                   {done ? "ส่งแล้ว ✓" : "ทำเสร็จ"}
                 </button>
+                <button className="icon-btn" style={{ width:32, height:32, border:0, color:"var(--text-3)" }} title="ลบการบ้าน"
+                  onClick={()=>{ if(confirm(`ลบการบ้าน "${h.title}" ออก?`)){ (DATA.deleteHomework||function(id){ DATA.HOMEWORK=DATA.HOMEWORK.filter(x=>x.id!==id); bumpData(); })(h.id); showToast("ลบการบ้านแล้ว"); } }}>
+                  <Icon n="x" size={14}/>
+                </button>
               </div>
             </div>
           );
@@ -80,24 +85,25 @@ function Homework(){
       </div>
 
       {assign && <HomeworkAssign onClose={()=>setAssign(false)} onSaved={(notify)=>{ setAssign(false); showToast(notify?"มอบหมาย + แจ้ง LINE แล้ว":"บันทึกการบ้านแล้ว"); }}/>}
-      {line && <LineNotify student={DATA.findStudent(line.student)||{name:line.student,cats:[line.cat],dur:60,guardian:"-",phone:"-",remaining:0}} homework={line}
-        onClose={()=>setLine(null)} onSent={()=>{ DATA.updateHomework(line.id,{notified:true}); bumpData(); setLine(null); showToast("ส่งการบ้านผ่าน LINE แล้ว"); }}/>}
+      {line && <LineNotify student={DATA.STUDENTS.find(s=>s._dbId===line._studentDbId)||DATA.findStudent(line.student)||{name:line.student,cats:[line.cat],dur:60,guardian:"-",phone:"-",remaining:0,_dbId:line._studentDbId||null}} homework={line}
+        onClose={()=>setLine(null)} onSent={(r)=>{ if(r&&r.sent){ DATA.updateHomework(line.id,{notified:true}); bumpData(); } setLine(null); showToast(r&&r.sent ? "ส่งการบ้านผ่าน LINE แล้ว ✓" : r&&r.connected ? "ผู้ปกครองยังไม่ได้เชื่อม LINE" : "ยังไม่ได้ตั้งค่า LINE (ไปที่ ตั้งค่า → LINE)"); }}/>}
       {toast}
     </div>
   );
 }
 
 function HomeworkAssign({ onClose, onSaved }){
-  const [sid, setSid] = useState(DATA.STUDENTS[0].id);
+  const [sid, setSid] = useState(DATA.STUDENTS[0]?.id||"");
   const [title, setTitle] = useState("");
   const [detail, setDetail] = useState("");
-  const [due, setDue] = useState("2026-06-10");
+  // default due date = 7 days from today
+  const [due, setDue] = useState(()=>{ const d=new Date(); d.setDate(d.getDate()+7); return d.toISOString().slice(0,10); });
   const [notify, setNotify] = useState(true);
   useEffect(()=>{ const h=(e)=>e.key==="Escape"&&onClose(); window.addEventListener("keydown",h); return ()=>window.removeEventListener("keydown",h); },[]);
   const stu = DATA.STUDENTS.find(s=>s.id===sid);
   const save = ()=>{
-    if(!title.trim()){ return; }
-    DATA.addHomework({ student:stu.name, cat:stu.cats[0], teacher:stu.teacher, title:title.trim(), detail:detail.trim()||"-", due, notified:notify });
+    if(!title.trim()||!stu) return;
+    DATA.addHomework({ _studentDbId:stu._dbId, student:stu.name, cat:stu.cats[0]||'piano', teacher:stu.teacher||'-', title:title.trim(), detail:detail.trim()||"-", due, notified:notify });
     bumpData(); onSaved(notify);
   };
   return (
@@ -115,7 +121,7 @@ function HomeworkAssign({ onClose, onSaved }){
         <div className="modal-body" style={{ background:"var(--surface)" }}>
           <div className="field"><label>นักเรียน</label>
             <select value={sid} onChange={e=>setSid(e.target.value)}>
-              {DATA.STUDENTS.map(s=><option key={s.id} value={s.id}>{s.name} · {DATA.CATS[s.cats[0]].label} ({s.teacher})</option>)}
+              {DATA.STUDENTS.map(s=>{ const c=DATA.CATS[s.cats&&s.cats[0]]; return <option key={s.id} value={s.id}>{s.name}{c?` · ${c.label}`:""} ({s.teacher})</option>; })}
             </select>
           </div>
           <div className="field"><label>หัวข้อการบ้าน</label><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="เช่น ฝึกสเกล C เมเจอร์"/></div>
@@ -192,7 +198,7 @@ function Referrals(){
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             {list.map(r=>{
-              const cat = DATA.CATS[r.cat];
+              const cat = DATA.CATS[r.cat] || { color:"var(--text-3)" };
               const st = DATA.REF_STATUS[r.status];
               return (
                 <div key={r.id} className="card" style={{ padding:"15px 18px", display:"flex", alignItems:"center", gap:14, borderLeft:`3px solid ${cat.color}` }}>
@@ -259,21 +265,22 @@ function Referrals(){
       </div>
 
       {invite && <ReferralInvite onClose={()=>setInvite(false)} onSaved={()=>{ setInvite(false); showToast("เพิ่มการแนะนำแล้ว"); }}/>}
-      {line && <LineNotify student={(()=>{ const s=DATA.findStudent(line.referrer)||{name:line.referrer,cats:[line.cat],dur:60,guardian:"-",phone:"-",remaining:0,points:0}; return {...s, _refFriend:line.friend}; })()}
-        referral={line} onClose={()=>setLine(null)} onSent={()=>{ setLine(null); showToast("ส่งโค้ดแนะนำผ่าน LINE แล้ว"); }}/>}
+      {line && <LineNotify student={(()=>{ const s=DATA.STUDENTS.find(x=>x._dbId===line._referrerDbId)||DATA.findStudent(line.referrer)||{name:line.referrer,cats:[line.cat],dur:60,guardian:"-",phone:"-",remaining:0,points:0,_dbId:line._referrerDbId||null}; return {...s, _refFriend:line.friend}; })()}
+        referral={line} onClose={()=>setLine(null)} onSent={(r)=>{ setLine(null); showToast(r&&r.sent ? "ส่งโค้ดแนะนำผ่าน LINE แล้ว ✓" : r&&r.connected ? "ผู้ปกครองยังไม่ได้เชื่อม LINE" : "ยังไม่ได้ตั้งค่า LINE (ไปที่ ตั้งค่า → LINE)"); }}/>}
       {toast}
     </div>
   );
 }
 
 function ReferralInvite({ onClose, onSaved }){
-  const [rid, setRid] = useState(DATA.STUDENTS[0].id);
+  const [rid, setRid] = useState(DATA.STUDENTS[0]?.id||"");
   const [friend, setFriend] = useState("");
+  const [phone, setPhone] = useState("");
   const [cat, setCat] = useState("piano");
   useEffect(()=>{ const h=(e)=>e.key==="Escape"&&onClose(); window.addEventListener("keydown",h); return ()=>window.removeEventListener("keydown",h); },[]);
   const referrer = DATA.STUDENTS.find(s=>s.id===rid);
-  const code = DATA.refCode(referrer.name);
-  const save = ()=>{ if(!friend.trim()) return; DATA.addReferral({ referrer:referrer.name, friend:friend.trim(), cat }); bumpData(); onSaved(); };
+  const code = referrer ? DATA.refCode(referrer.name) : "";
+  const save = ()=>{ if(!friend.trim()||!referrer) return; DATA.addReferral({ _referrerDbId:referrer._dbId, referrer:referrer.name, friend:friend.trim(), phone:phone.trim()||null, cat }); bumpData(); onSaved(); };
   return (
     <>
       <div className="scrim" onClick={onClose}></div>
@@ -296,7 +303,10 @@ function ReferralInvite({ onClose, onSaved }){
             <Icon n="star" size={17}/>
             <span style={{ fontSize:13, color:"var(--primary-ink)" }}>โค้ดแนะนำของ {referrer.name}: <b style={{ fontFamily:"var(--ff-display)", letterSpacing:"0.03em" }}>{code}</b></span>
           </div>
-          <div className="field"><label>ชื่อเพื่อนใหม่ / ผู้ปกครอง</label><input value={friend} onChange={e=>setFriend(e.target.value)} placeholder="เช่น น้องพีช"/></div>
+          <div style={{display:'flex',gap:12}}>
+            <div className="field" style={{flex:2}}><label>ชื่อเพื่อนใหม่ / ผู้ปกครอง</label><input value={friend} onChange={e=>setFriend(e.target.value)} placeholder="เช่น น้องพีช"/></div>
+            <div className="field" style={{flex:1}}><label>เบอร์ติดต่อ</label><input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="08x-xxx"/></div>
+          </div>
           <div className="field"><label>สนใจคลาส</label>
             <div className="tag-filter">
               {Object.values(DATA.CATS).map(c=>(
