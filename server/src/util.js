@@ -41,3 +41,26 @@ export const hhmm = (min) =>
   `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 
 export const today = () => new Date().toISOString().slice(0, 10);
+
+// Decide if a student is "near the end of a course".
+// For students enrolled in MULTIPLE subjects (packages_json), we must look at each
+// subject on its own — otherwise a finished subject is hidden behind the aggregate
+// remaining (e.g. piano 0 + guitar 10 → total 10 → looks fine). Returns the WORST
+// (lowest-remaining) subject at/under the threshold so the UI can name it.
+// Falls back to the aggregate sessions_remaining for single-course students.
+export function nearLimitInfo(student, threshold) {
+  let pkgs = [];
+  try { if (student.packages_json) { const a = JSON.parse(student.packages_json); if (Array.isArray(a)) pkgs = a; } } catch { /* malformed → ignore */ }
+  const hits = pkgs
+    .filter((p) => p && (p.sessions_total || 0) > 0 && (p.sessions_remaining || 0) <= threshold)
+    .sort((a, b) => (a.sessions_remaining || 0) - (b.sessions_remaining || 0));
+  if (hits.length) {
+    const p = hits[0];
+    return { near: true, perSubject: true, remaining: p.sessions_remaining || 0, category: p.category || null, name: p.name || null };
+  }
+  if (pkgs.length > 1) return { near: false }; // multi-course but every subject is fine
+  // single-course / no package breakdown → aggregate
+  const rem = student.sessions_remaining || 0;
+  if (rem <= threshold) return { near: true, perSubject: false, remaining: rem, category: student.category || null, name: null };
+  return { near: false };
+}

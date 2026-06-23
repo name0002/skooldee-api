@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { all, get } from '../db.js';
-import { wrap, today, hhmm } from '../util.js';
+import { wrap, today, hhmm, nearLimitInfo } from '../util.js';
 import { ownStudentIds, pageAllows } from '../auth.js';
 
 const r = Router();
@@ -16,7 +16,7 @@ r.get('/', wrap((req, res) => {
   const ownSet = req.scopeOwn ? new Set(ownStudentIds(sid, req.teacherId)) : null;
   const seesMoney = pageAllows(req.perms, 'finance', 'view');
 
-  let activeStudents = all("SELECT id, name, nickname, sessions_remaining, category FROM students WHERE school_id = ? AND status = 'active'", sid);
+  let activeStudents = all("SELECT id, name, nickname, sessions_remaining, category, packages_json FROM students WHERE school_id = ? AND status = 'active'", sid);
   if (ownSet) activeStudents = activeStudents.filter((s) => ownSet.has(s.id));
 
   const revenue = seesMoney ? get(
@@ -35,9 +35,11 @@ r.get('/', wrap((req, res) => {
 
   const thr = sch.near_limit_threshold;
   const nearLimit = activeStudents
-    .filter((s) => s.sessions_remaining <= thr)
-    .sort((a, b) => a.sessions_remaining - b.sessions_remaining)
-    .map((s) => ({ id: s.id, name: s.name, nickname: s.nickname, sessions_remaining: s.sessions_remaining }));
+    .map((s) => ({ s, nl: nearLimitInfo(s, thr) }))
+    .filter((x) => x.nl.near)
+    // show the subject's own remaining (per-course) when it's a multi-subject hit
+    .map((x) => ({ id: x.s.id, name: x.s.name, nickname: x.s.nickname, sessions_remaining: x.nl.remaining, subject: x.nl.perSubject ? (x.nl.name || x.nl.category || null) : null }))
+    .sort((a, b) => a.sessions_remaining - b.sessions_remaining);
 
   const byCatMap = {};
   for (const s of activeStudents) { const k = s.category || ''; byCatMap[k] = (byCatMap[k] || 0) + 1; }

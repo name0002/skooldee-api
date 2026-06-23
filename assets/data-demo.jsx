@@ -124,7 +124,26 @@ function dispName(x){
 
 let NEAR_LIMIT = 2;
 function setNearLimit(n){ NEAR_LIMIT = n; }
-const isNearEnding = (s)=> s.status==="active" && s.remaining<=NEAR_LIMIT;
+// Near-ending = aggregate low OR (for multi-subject students) ANY one subject at/under
+// the threshold — so a finished course isn't hidden behind a high combined remaining.
+const isNearEnding = (s)=>{
+  if(s.status!=="active") return false;
+  const pkgs = Array.isArray(s.packages) ? s.packages : [];
+  if(pkgs.some(p=> p && (p.sessions_total||0)>0 && (p.sessions_remaining||0)<=NEAR_LIMIT)) return true;
+  if(pkgs.length>1) return false; // multi-course but every subject still has room
+  return (s.remaining||0)<=NEAR_LIMIT;
+};
+// Detail of WHICH course is near-ending — returns the worst subject for multi-course
+// students (so banners/messages can name it) or the aggregate for single-course.
+// { remaining, category|null, perSubject }  — call only when isNearEnding(s) is true.
+const nearEndingInfo = (s)=>{
+  const pkgs = Array.isArray(s.packages) ? s.packages : [];
+  const hits = pkgs
+    .filter(p=> p && (p.sessions_total||0)>0 && (p.sessions_remaining||0)<=NEAR_LIMIT)
+    .sort((a,b)=> (a.sessions_remaining||0)-(b.sessions_remaining||0));
+  if(hits.length){ const p=hits[0]; return { remaining:p.sessions_remaining||0, category:p.category||null, perSubject:(pkgs.length>1) }; }
+  return { remaining:(s.remaining||0), category:(s.cats&&s.cats[0])||null, perSubject:false };
+};
 
 const STATUS = {
   lead:            { label:"สนใจ",            color:"var(--c-piano)",  soft:"var(--c-piano-soft)" },
@@ -319,7 +338,7 @@ function deleteAssessment(studentId, id){
 
 window.DATA = { SCHOOL, CATS, TEACHERS, TEACHER_BY_CAT, COURSES, STUDENTS, STATUS, DAYS, SCHEDULE, layoutDay,
   DAY_START, DAY_END, PX_PER_MIN, toMin, SLOT_TIMES, TODAY, INVOICES, PAY_STATUS, REVENUE, baht,
-  PACKAGES_DEFAULT, loadPackages, savePackagePrice, NEAR_LIMIT, isNearEnding,
+  PACKAGES_DEFAULT, loadPackages, savePackagePrice, NEAR_LIMIT, isNearEnding, nearEndingInfo,
   updateStudent, findStudent, TODAY_KEY, TODAY_LABEL, ATT_STATUS, loadAttendance, saveAttendance,
   TIERS, tierOf, givePoints, ASSESS_CRITERIA:{}, SHOW_ASSESS_PARENTS:false, SHOW_COURSE_NO_PARENTS:false, PAYMENT_QR_IMAGE:null, SCHOOL_LOGO:null, ENROLLMENTS:[],
   listAssessments, addAssessment, deleteAssessment, NOW_KEY, HW_STATUS, HOMEWORK, addHomework, updateHomework, isOverdue, setNearLimit,

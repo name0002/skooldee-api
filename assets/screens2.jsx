@@ -576,15 +576,17 @@ function StudentDrawer({ s, onClose }){
         </>
       ) : (
         <>
-          {DATA.isNearEnding(s) && (
+          {DATA.isNearEnding(s) && (()=>{ const ne=DATA.nearEndingInfo?DATA.nearEndingInfo(s):{remaining:s.remaining,perSubject:false,category:null};
+            const subjLabel=ne.perSubject&&ne.category?((DATA.CATS[ne.category]||{}).label||ne.category):null;
+            return (
             <div style={{ display:"flex", alignItems:"center", gap:11, padding:"12px 14px", borderRadius:12, background:"var(--danger-soft)", marginBottom:16 }}>
               <div style={{ fontSize:20 }}>⚠️</div>
               <div style={{ flex:1, fontSize:13.5, color:"color-mix(in oklch,var(--danger) 80%,black)" }}>
-                <b>คอร์สใกล้หมด</b> — เหลือ {s.remaining} ครั้ง ควรชวนต่อคอร์ส
+                <b>{ne.remaining<=0?(subjLabel?`วิชา${subjLabel}หมดแล้ว`:'คอร์สหมดแล้ว'):(subjLabel?`วิชา${subjLabel}ใกล้หมด`:'คอร์สใกล้หมด')}</b> — {ne.remaining<=0?'ควรชวนต่อคอร์ส':`เหลือ ${ne.remaining} ครั้ง ควรชวนต่อคอร์ส`}
               </div>
               <button className="btn btn-sm" style={{ background:"#06c755", color:"#fff" }} onClick={()=>setLine(true)}><Icon n="bell" size={14}/> LINE</button>
             </div>
-          )}
+          ); })()}
 
           <div style={{ display:"flex", gap:12, marginBottom:18 }}>
             <MiniStat label={`คงเหลือ (${s.pkg} ครั้ง)`} val={s.remaining+" ครั้ง"} tone={DATA.isNearEnding(s)?"var(--danger)":"var(--ok)"}/>

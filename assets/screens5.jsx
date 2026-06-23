@@ -1300,8 +1300,10 @@ function LineSettingsSection({ showToast }){
 
   const copy = (text)=>{ try{ navigator.clipboard.writeText(text); showToast('คัดลอกแล้ว ✓'); }catch(e){} };
 
-  const togglePref = async(key)=>{
-    const next = { ...prefs, [key]: !prefs[key] };
+  const togglePref = async(key, onByDefault)=>{
+    // for default-on prefs (e.g. homework) an absent key counts as ON, so flip off that
+    const cur = onByDefault ? (prefs[key]!==false) : !!prefs[key];
+    const next = { ...prefs, [key]: !cur };
     setPrefs(next);
     try{ await window.API.updateSchool({ notify_prefs: next }); }
     catch(ex){ setPrefs(prefs); showToast('บันทึกไม่สำเร็จ','error'); }
@@ -1490,15 +1492,16 @@ function LineSettingsSection({ showToast }){
 
       {/* auto-notification preferences — to PARENTS (opt-in) */}
       {configured && (
-        <SettingsCard title="แจ้งเตือนถึงผู้ปกครอง" sub="เลือกเหตุการณ์ที่อยากให้ระบบส่ง LINE ถึงผู้ปกครองโดยอัตโนมัติ (ค่าเริ่มต้นปิดทั้งหมด)">
+        <SettingsCard title="แจ้งเตือนถึงผู้ปกครอง" sub="เลือกเหตุการณ์ที่อยากให้ระบบส่ง LINE ถึงผู้ปกครองโดยอัตโนมัติ (การบ้านเปิดไว้ให้ ส่วนอื่นปิดเริ่มต้น)">
           {[
             { key:'absent',     label:'เมื่อนักเรียนขาด/ลาเรียน', hint:'ส่งทันทีที่เช็คชื่อเป็นขาดหรือลา (ไม่ส่งตอนมาเรียนปกติ)' },
+            { key:'homework',   label:'เมื่อมอบหมายการบ้าน',      hint:'ตั้งค่าให้ช่อง "แจ้งผู้ปกครองผ่าน LINE" ถูกติ๊กไว้อัตโนมัติตอนมอบหมายการบ้าน (ยังกดยกเลิกรายครั้งได้)', onByDefault:true },
             { key:'invoice',    label:'เมื่อออกใบแจ้งหนี้ใหม่',   hint:'แจ้งยอดที่ต้องชำระให้ผู้ปกครองทราบ' },
             { key:'near_limit', label:'เมื่อคอร์สใกล้หมด',         hint:'เตือนให้ต่อคอร์สเมื่อจำนวนคาบเหลือน้อย' },
             { key:'confirm_1d', label:'เตือนคอนเฟิมคลาส (ก่อนเรียน 1 วัน)', hint:'ส่งเตือนผู้ปกครองทุกเช้าว่าพรุ่งนี้น้องมีเรียน ให้ยืนยันหรือแจ้งลาล่วงหน้า — ช่วยลดการขาดเรียน' },
             { key:'birthday',   label:'อวยพรวันเกิดนักเรียน',      hint:'ส่งคำอวยพรถึงผู้ปกครองในวันเกิดของน้อง (เช้าวันเกิด)', exp:true },
           ].map(o=>(
-            <PrefRow key={o.key} o={o} on={!!prefs[o.key]} toggle={()=>togglePref(o.key)}/>
+            <PrefRow key={o.key} o={o} on={o.onByDefault ? prefs[o.key]!==false : !!prefs[o.key]} toggle={()=>togglePref(o.key, o.onByDefault)}/>
           ))}
           <div style={{ marginTop:12, fontSize:12.5, color:'var(--text-3)', lineHeight:1.55 }}>
             📌 ส่งได้เฉพาะนักเรียนที่ผู้ปกครอง<b>เชื่อม LINE แล้ว</b> (มีเครื่องหมาย ✓ ในโปรไฟล์นักเรียน)

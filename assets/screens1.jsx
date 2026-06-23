@@ -162,7 +162,7 @@ function Dashboard({ go }){
           <div style={{ flex:1 }}>
             <div style={{ fontWeight:700, color:"color-mix(in oklch,var(--danger) 80%,black)", fontSize:14.5 }}>มีนักเรียน {nearList.length} คนคอร์สใกล้หมด</div>
             <div style={{ fontSize:13, color:"color-mix(in oklch,var(--danger) 65%,black)", marginTop:1 }}>
-              {nearList.slice(0,4).map(s=>`${s.name} (เหลือ ${s.remaining})`).join(" · ")}{nearList.length>4?` และอีก ${nearList.length-4} คน`:""} — ควรชวนต่อคอร์ส
+              {nearList.slice(0,4).map(s=>{ const ne=DATA.nearEndingInfo?DATA.nearEndingInfo(s):{remaining:s.remaining,category:null,perSubject:false}; const subj=ne.perSubject&&ne.category?((DATA.CATS[ne.category]||{}).label||ne.category):null; return `${s.name} (${subj?subj+' ':''}เหลือ ${ne.remaining})`; }).join(" · ")}{nearList.length>4?` และอีก ${nearList.length-4} คน`:""} — ควรชวนต่อคอร์ส
             </div>
           </div>
           <button className="btn btn-sm hide-mobile" style={{ background:"#06c755", color:"#fff" }} onClick={(e)=>{ e.stopPropagation(); go("students"); }}><Icon n="bell" size={14}/> แจ้ง LINE</button>
@@ -253,7 +253,7 @@ function Dashboard({ go }){
                   </div>
                   {s.balance>0
                     ? <span className="badge" style={{ background:"var(--danger-soft)", color:"color-mix(in oklch,var(--danger) 78%,black)" }}>ค้าง {DATA.baht(s.balance)}</span>
-                    : <span className="badge" style={{ background:"var(--warn-soft)", color:"color-mix(in oklch,var(--warn) 70%,black)" }}>ใกล้หมด · {s.remaining} ครั้ง</span>}
+                    : <span className="badge" style={{ background:"var(--warn-soft)", color:"color-mix(in oklch,var(--warn) 70%,black)" }}>ใกล้หมด · {(DATA.nearEndingInfo?DATA.nearEndingInfo(s).remaining:s.remaining)} ครั้ง</span>}
                 </div>
               ))}
             </div>

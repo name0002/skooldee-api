@@ -98,7 +98,11 @@ function HomeworkAssign({ onClose, onSaved }){
   const [detail, setDetail] = useState("");
   // default due date = 7 days from today
   const [due, setDue] = useState(()=>{ const d=new Date(); d.setDate(d.getDate()+7); return d.toISOString().slice(0,10); });
-  const [notify, setNotify] = useState(true);
+  // default the LINE-notify checkbox from the school's "เมื่อมอบหมายการบ้าน" pref (default ON)
+  const [notify, setNotify] = useState(()=>{
+    try{ const p=DATA._schoolRaw&&DATA._schoolRaw.notify_prefs; const o=typeof p==='string'?JSON.parse(p):p; return !o || o.homework!==false; }
+    catch(e){ return true; }
+  });
   useEffect(()=>{ const h=(e)=>e.key==="Escape"&&onClose(); window.addEventListener("keydown",h); return ()=>window.removeEventListener("keydown",h); },[]);
   const stu = DATA.STUDENTS.find(s=>s.id===sid);
   const save = ()=>{

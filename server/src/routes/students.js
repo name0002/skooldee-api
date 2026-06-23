@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import { all, get, run, tierOf } from '../db.js';
-import { wrap, required, bad } from '../util.js';
+import { wrap, required, bad, nearLimitInfo } from '../util.js';
 import { requirePage, ownStudentIds } from '../auth.js';
 
 const r = Router();
@@ -90,7 +90,10 @@ r.get('/', wrap((req, res) => {
       s.parent_token = tok;
     }
   }
-  let list = rows.map((s) => ({ ...s, tier: tierOf(s.points), near_limit: s.sessions_remaining <= sch.near_limit_threshold }));
+  let list = rows.map((s) => {
+    const nl = nearLimitInfo(s, sch.near_limit_threshold);
+    return { ...s, tier: tierOf(s.points), near_limit: nl.near, near_limit_subject: nl.perSubject ? { remaining: nl.remaining, category: nl.category, name: nl.name } : null };
+  });
 
   // teachers scoped to 'own' only see their own students
   if (req.scopeOwn) {
