@@ -414,7 +414,7 @@ function StudentDrawer({ s, onClose }){
       if(!m) return { bd_day:"", bd_mon:"", bd_year:"", bd_era:"be" };
       return { bd_day:String(Number(m[3])), bd_mon:String(Number(m[2])), bd_year:String(Number(m[1])+543), bd_era:"be" };
     })();
-    setF({ name:s.name||s.full||"", nickname:s.nickname||"", age:s.age, phone:s.phone, guardian:s.guardian==="-"?"":s.guardian, email:s.email==="-"?"":(s.email||""), goal:s.goal||"", dur:s.dur, status:s.status, balance:s.balance, cats:(s.cats||[]).slice(), ...bd });
+    setF({ name:s.name||s.full||"", nickname:s.nickname||"", age:s.age, phone:s.phone, guardian:s.guardian==="-"?"":s.guardian, email:s.email==="-"?"":(s.email||""), goal:s.goal||"", recipient:s.recipient||"parent", dur:s.dur, status:s.status, balance:s.balance, cats:(s.cats||[]).slice(), ...bd });
     const init = (s.packages&&s.packages.length)
       ? s.packages.map(p=>({ category:p.category||(s.cats&&s.cats[0])||'piano', package_id:p.package_id||null, sessions:p.sessions_total||0, remaining:p.sessions_remaining||0 }))
       : [{ category:(s.cats&&s.cats[0])||'piano', package_id:null, sessions:s.pkg||0, remaining:s.remaining||0 }];
@@ -431,7 +431,7 @@ function StudentDrawer({ s, onClose }){
       name:f.name.trim(), nickname:(f.nickname||"").trim()||null,
       age:bdInfo.age!=null ? bdInfo.age : (Number(f.age)||s.age),
       birthday:bdInfo.birthday, phone:f.phone||s.phone, guardian:f.guardian.trim()||"-",
-      email:(f.email||"").trim()||null, goal:(f.goal||"").trim()||null,
+      email:(f.email||"").trim()||null, goal:(f.goal||"").trim()||null, recipient:f.recipient||"parent",
       packages,
       status:f.status, balance:Math.max(0,Number(f.balance)||0),
       categories:(f.cats&&f.cats.length)?f.cats:s.cats
@@ -531,8 +531,16 @@ function StudentDrawer({ s, onClose }){
               ))}
             </div>
           </div>
-          <div className="field"><label>ผู้ปกครอง</label><input value={f.guardian} onChange={e=>set("guardian",e.target.value)} placeholder="เช่น คุณแม่นภา"/></div>
+          <div className="field"><label>ผู้ปกครอง / ผู้ติดต่อ</label><input value={f.guardian} onChange={e=>set("guardian",e.target.value)} placeholder="เช่น คุณแม่นภา"/></div>
           <div className="field"><label>เบอร์ติดต่อ</label><input value={f.phone} onChange={e=>set("phone",e.target.value)}/></div>
+          <div className="field">
+            <label>ผู้รับแจ้งเตือน LINE <span style={{fontSize:11,color:'var(--muted)'}}>ปรับคำในข้อความเชิญ/แจ้งการบ้าน</span></label>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+              {(DATA.RECIPIENT_TYPES||[]).map(rt=>(
+                <button key={rt.key} type="button" className={"chip"+((f.recipient||'parent')===rt.key?" active":"")} onClick={()=>set('recipient',rt.key)}>{rt.label}</button>
+              ))}
+            </div>
+          </div>
           <div className="field"><label>อีเมล</label><input type="email" value={f.email} onChange={e=>set("email",e.target.value)} placeholder="parent@email.com"/></div>
           <div className="field"><label>เป้าหมายผู้เรียน</label><input value={f.goal} onChange={e=>set("goal",e.target.value)} placeholder="เช่น สอบเข้าดนตรี / เล่นเพลงโปรด"/></div>
           <div className="field">
@@ -656,7 +664,9 @@ function StudentDrawer({ s, onClose }){
                         const buildMsg = (link)=>{
                           const tpl = sr.invite_message_template;
                           if(!tpl) return link;
-                          let msg = String(tpl).replace(/\{ชื่อ\}/g, s.nickname||s.name||'');
+                          const nm = s.nickname||s.name||'';
+                          const w = (DATA.recipientWords||function(){return{greet:'คุณพ่อคุณแม่ของน้อง'+nm};})(s.recipient||'parent', nm);
+                          let msg = String(tpl).replace(/\{ผู้รับ\}/g, w.greet).replace(/\{ชื่อ\}/g, nm);
                           msg = msg.includes('{ลิงก์}') ? msg.replace(/\{ลิงก์\}/g, link) : (msg+'\n'+link);
                           return msg;
                         };
@@ -1039,7 +1049,7 @@ function AddStudentDrawer({ onClose, onSaved }){
     return {
       name:'', nickname:'', age:'', categories:['piano'], status:'active',
       bd_day:'', bd_mon:'', bd_year:'', bd_era:'be',
-      parent_name:'', parent_phone:'', email:'', goal:'',
+      parent_name:'', parent_phone:'', email:'', goal:'', recipient:'parent',
       package_id: first?(first._dbId||first.id):null,
       sessions_total: first?first.sessions:10,
       sessions_remaining: first?first.sessions:10,
@@ -1115,6 +1125,7 @@ function AddStudentDrawer({ onClose, onSaved }){
       status: f.status,
       parent_name: f.parent_name.trim()||null,
       parent_phone: f.parent_phone.trim()||null,
+      recipient_type: f.recipient||'parent',
       email: (f.email||'').trim()||null,
       goal: (f.goal||'').trim()||null,
       packages: enrollments.map(e=>({
@@ -1235,12 +1246,21 @@ function AddStudentDrawer({ onClose, onSaved }){
 
       <div style={{display:'flex',gap:12}}>
         <div className="field" style={{flex:1}}>
-          <label>ผู้ปกครอง</label>
+          <label>ผู้ปกครอง / ผู้ติดต่อ</label>
           <input value={f.parent_name} onChange={e=>set('parent_name',e.target.value)} placeholder="คุณแม่สมใจ"/>
         </div>
         <div className="field" style={{flex:1}}>
           <label>เบอร์ติดต่อ</label>
           <input value={f.parent_phone} onChange={e=>set('parent_phone',e.target.value)} placeholder="081-xxx-xxxx"/>
+        </div>
+      </div>
+
+      <div className="field">
+        <label>ผู้รับแจ้งเตือน LINE <span style={{fontSize:11,color:'var(--muted)'}}>ข้อความเชิญ/แจ้งการบ้านจะปรับคำตามนี้</span></label>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          {(DATA.RECIPIENT_TYPES||[]).map(rt=>(
+            <button key={rt.key} type="button" className={"chip"+(f.recipient===rt.key?" active":"")} onClick={()=>set('recipient',rt.key)}>{rt.label}</button>
+          ))}
         </div>
       </div>
 

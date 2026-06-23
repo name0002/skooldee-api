@@ -64,3 +64,25 @@ export function nearLimitInfo(student, threshold) {
   if (rem <= threshold) return { near: true, perSubject: false, remaining: rem, category: student.category || null, name: null };
   return { near: false };
 }
+
+// Relationship of the LINE recipient → how messages address them and refer to the student.
+// Not every student's contact is a parent: some adults learn for themselves, some are
+// siblings/relatives. `type`: 'parent' (default) | 'self' | 'sibling' | 'relative'.
+//   greet      — salutation referencing the student (e.g. "คุณพ่อคุณแม่ของน้องเอย")
+//   studentRef — how to mention the student in the body ("น้องเอย", or "คุณ" when self)
+//   care       — closing ask appropriate to the recipient
+//   isSelf     — the learner receives their own messages (address directly, no "น้อง")
+export function recipientWords(type, name) {
+  const n = name || '';
+  switch (type) {
+    case 'self':
+      return { greet: `คุณ${n}`, studentRef: 'คุณ', care: 'รบกวนฝึกซ้อมตามนี้ด้วยนะคะ 😊', isSelf: true };
+    case 'sibling':
+      return { greet: `พี่ของน้อง${n}`, studentRef: `น้อง${n}`, care: 'รบกวนช่วยดูแลน้องฝึกด้วยนะคะ 😊', isSelf: false };
+    case 'relative':
+      return { greet: `ครอบครัวของน้อง${n}`, studentRef: `น้อง${n}`, care: 'รบกวนช่วยดูแลน้องฝึกด้วยนะคะ 😊', isSelf: false };
+    case 'parent':
+    default:
+      return { greet: `คุณพ่อคุณแม่ของน้อง${n}`, studentRef: `น้อง${n}`, care: 'รบกวนผู้ปกครองช่วยดูแลน้องฝึกด้วยนะคะ 😊', isSelf: false };
+  }
+}

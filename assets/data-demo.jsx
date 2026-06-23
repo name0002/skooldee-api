@@ -156,6 +156,25 @@ const lineResultMsg = (r, okText)=>{
   return "ยังไม่ได้ตั้งค่า LINE (ไปที่ ตั้งค่า → LINE)";
 };
 
+// Who receives a student's LINE messages → relationship-aware wording (mirrors the
+// server's recipientWords in util.js). Keeps invite/homework copy correct when the
+// contact isn't a parent (adult self-learner, older sibling, relative).
+const RECIPIENT_TYPES = [
+  { key:'parent',  label:'พ่อแม่/ผู้ปกครอง' },
+  { key:'self',    label:'เรียนเอง (ผู้ใหญ่)' },
+  { key:'sibling', label:'พี่/น้อง' },
+  { key:'relative',label:'ญาติ/อื่นๆ' },
+];
+const recipientWords = (type, name)=>{
+  const n = name||'';
+  switch(type){
+    case 'self':     return { greet:`คุณ${n}`, studentRef:'คุณ', care:'รบกวนฝึกซ้อมตามนี้ด้วยนะคะ 😊', isSelf:true };
+    case 'sibling':  return { greet:`พี่ของน้อง${n}`, studentRef:`น้อง${n}`, care:'รบกวนช่วยดูแลน้องฝึกด้วยนะคะ 😊', isSelf:false };
+    case 'relative': return { greet:`ครอบครัวของน้อง${n}`, studentRef:`น้อง${n}`, care:'รบกวนช่วยดูแลน้องฝึกด้วยนะคะ 😊', isSelf:false };
+    default:         return { greet:`คุณพ่อคุณแม่ของน้อง${n}`, studentRef:`น้อง${n}`, care:'รบกวนผู้ปกครองช่วยดูแลน้องฝึกด้วยนะคะ 😊', isSelf:false };
+  }
+};
+
 const STATUS = {
   lead:            { label:"สนใจ",            color:"var(--c-piano)",  soft:"var(--c-piano-soft)" },
   trial_scheduled: { label:"นัดทดลองเรียน",   color:"var(--c-dance)",  soft:"var(--c-dance-soft)" },
@@ -349,7 +368,7 @@ function deleteAssessment(studentId, id){
 
 window.DATA = { SCHOOL, CATS, TEACHERS, TEACHER_BY_CAT, COURSES, STUDENTS, STATUS, DAYS, SCHEDULE, layoutDay,
   DAY_START, DAY_END, PX_PER_MIN, toMin, SLOT_TIMES, TODAY, INVOICES, PAY_STATUS, REVENUE, baht,
-  PACKAGES_DEFAULT, loadPackages, savePackagePrice, NEAR_LIMIT, isNearEnding, nearEndingInfo, lineResultMsg,
+  PACKAGES_DEFAULT, loadPackages, savePackagePrice, NEAR_LIMIT, isNearEnding, nearEndingInfo, lineResultMsg, recipientWords, RECIPIENT_TYPES,
   updateStudent, findStudent, TODAY_KEY, TODAY_LABEL, ATT_STATUS, loadAttendance, saveAttendance,
   TIERS, tierOf, givePoints, ASSESS_CRITERIA:{}, SHOW_ASSESS_PARENTS:false, SHOW_COURSE_NO_PARENTS:false, PAYMENT_QR_IMAGE:null, SCHOOL_LOGO:null, ENROLLMENTS:[],
   listAssessments, addAssessment, deleteAssessment, NOW_KEY, HW_STATUS, HOMEWORK, addHomework, updateHomework, isOverdue, setNearLimit,

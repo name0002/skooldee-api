@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { all, get, run } from '../db.js';
-import { wrap, required, bad } from '../util.js';
+import { wrap, required, bad, recipientWords } from '../util.js';
 import { pushToParent } from '../line-push.js';
 import { requirePage, ownStudentIds } from '../auth.js';
 
@@ -27,7 +27,7 @@ r.get('/', wrap((req, res) => {
 r.post('/', canManage, wrap(async (req, res) => {
   const b = required(req.body, ['student_id', 'title']);
   if (!ownsStudent(req, b.student_id)) throw bad('student not found', 404);
-  const student = get('SELECT id, name, nickname FROM students WHERE id = ? AND school_id = ?', b.student_id, req.schoolId);
+  const student = get('SELECT id, name, nickname, recipient_type FROM students WHERE id = ? AND school_id = ?', b.student_id, req.schoolId);
   if (!student) throw bad('student not found', 404);
   const result = run(
     'INSERT INTO homework (school_id, student_id, title, detail, due_date, notified) VALUES (?,?,?,?,?,?)',
@@ -37,12 +37,31 @@ r.post('/', canManage, wrap(async (req, res) => {
   // explicit "notify" → push to parent's LINE right away (not gated by opt-in prefs)
   let line = null;
   if (b.notify) {
-    const who = student.nickname || student.name;
-    const text = b.message || (
-      `📚 แจ้งการบ้านของน้อง${who}\n\n📝 ${b.title}` +
-      (b.detail ? `\n${b.detail}` : '') +
-      (b.due_date ? `\n⏰ ส่งภายใน ${b.due_date}` : '') +
-      `\n\nรบกวนผู้ปกครองช่วยดูแลน้องฝึกด้วยนะคะ 😊`);
+    const name = student.nickname || student.name;
+    const w = recipientWords(student.recipient_type, name);
+    let text = b.message;                         // explicit client-supplied message wins
+    if (!text) {
+      const sch = get('SELECT homework_message_template FROM schools WHERE id = ?', req.schoolId);
+      const tpl = sch && sch.homework_message_template && sch.homework_message_template.trim();
+      if (tpl) {
+        // school's custom template — placeholders resolve per-student (relationship-aware)
+        text = tpl
+          .replace(/\{ผู้รับ\}/g, w.greet)
+          .replace(/\{ชื่อ\}/g, name || '')
+          .replace(/\{หัวข้อ\}/g, b.title || '')
+          .replace(/\{รายละเอียด\}/g, b.detail || '')
+          .replace(/\{กำหนดส่ง\}/g, b.due_date || '')
+          .replace(/[ \t]*\n{3,}/g, '\n\n');       // tidy blank lines left by empty placeholders
+      } else {
+        // built-in default — "ของน้องX" for guardians, direct for adult self-learners
+        const subj = w.isSelf ? 'ค่ะ' : `ของ${w.studentRef}`;
+        text =
+          `📚 แจ้งการบ้าน${subj}\n\n📝 ${b.title}` +
+          (b.detail ? `\n${b.detail}` : '') +
+          (b.due_date ? `\n⏰ ส่งภายใน ${b.due_date}` : '') +
+          `\n\n${w.care}`;
+      }
+    }
     line = await pushToParent(req.schoolId, student.id, text);
   }
   res.status(201).json({ ...hw, line });

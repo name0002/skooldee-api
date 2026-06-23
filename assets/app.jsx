@@ -25,6 +25,7 @@ function mapStudent(s){
     goal:s.goal||null,
     email:s.email||null,
     birthday:s.birthday||null,
+    recipient:s.recipient_type||'parent',
     packages:(function(){ try{ if(s.packages_json){ var a=JSON.parse(s.packages_json); if(Array.isArray(a)) return a; } }catch(e){} return []; })(),
   };
 }
@@ -491,6 +492,7 @@ function AuthRoot(){
         if('nickname'  in patch) ap.nickname  = patch.nickname;
         if('goal'      in patch) ap.goal      = patch.goal;
         if('email'     in patch) ap.email     = patch.email;
+        if('recipient' in patch) ap.recipient_type = patch.recipient;
         if('packages'  in patch){ ap.packages = patch.packages;
           s.packages = patch.packages.slice();
           s.remaining = patch.packages.reduce((a,p)=>a+(Number(p.sessions_remaining)||0),0);

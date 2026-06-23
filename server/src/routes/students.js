@@ -48,13 +48,13 @@ function insertStudent(sid, b) {
   const packageId = (enr && enr.firstPkg) || b.package_id || null;
   const result = run(
     `INSERT INTO students (school_id, name, nickname, age, birthday, parent_name, parent_phone, line_id, category, categories_json,
-       teacher_id, package_id, sessions_remaining, sessions_total, balance_due, status, referral_code, parent_token, goal, email, packages_json)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       teacher_id, package_id, sessions_remaining, sessions_total, balance_due, status, referral_code, parent_token, goal, email, packages_json, recipient_type)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     sid, b.name, b.nickname || null, b.age || null, b.birthday || null, b.parent_name || null, b.parent_phone || null,
     b.line_id || null, primaryCat, categoriesJson, b.teacher_id || null, packageId,
     sessRemain, sessTotal, b.balance_due || 0,
     b.status || 'active', codeFor(b.nickname || b.name), crypto.randomBytes(8).toString('hex'),
-    b.goal || null, b.email || null, enr ? enr.json : null
+    b.goal || null, b.email || null, enr ? enr.json : null, b.recipient_type || null
   );
   return get('SELECT * FROM students WHERE id = ? AND school_id = ?', Number(result.lastInsertRowid), sid);
 }
@@ -129,7 +129,7 @@ r.patch('/:id', canManage, wrap((req, res) => {
   const s = get('SELECT * FROM students WHERE id = ? AND school_id = ?', req.params.id, req.schoolId);
   if (!s) throw bad('student not found', 404);
   const fields = ['name', 'nickname', 'age', 'birthday', 'parent_name', 'parent_phone', 'line_id', 'category',
-    'teacher_id', 'package_id', 'sessions_remaining', 'sessions_total', 'balance_due', 'status', 'goal', 'email'];
+    'teacher_id', 'package_id', 'sessions_remaining', 'sessions_total', 'balance_due', 'status', 'goal', 'email', 'recipient_type'];
   const sets = [], vals = [];
   for (const f of fields) if (f in req.body) { sets.push(`${f} = ?`); vals.push(req.body[f]); }
   // multi-subject: categories[] → categories_json (+ sync primary category if not set explicitly)

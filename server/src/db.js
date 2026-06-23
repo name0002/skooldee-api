@@ -307,8 +307,13 @@ export function initSchema() {
   // sees it; parents only when this toggle is on.
   addCol('ALTER TABLE schools ADD COLUMN show_course_no_to_parents INTEGER NOT NULL DEFAULT 0');
   // customizable message the admin copies when inviting a parent to link LINE.
-  // Placeholders: {ชื่อ} = student nick/name, {ลิงก์} = the one-tap LIFF link.
+  // Placeholders: {ชื่อ} = student nick/name, {ลิงก์} = the one-tap LIFF link, {ผู้รับ} = relationship-aware greeting.
   addCol('ALTER TABLE schools ADD COLUMN invite_message_template TEXT');
+  // who actually receives a student's LINE messages, so wording adapts (not always "คุณพ่อคุณแม่"):
+  // parent (default/null) | self (adult learner) | sibling (พี่/น้อง) | relative (ญาติ/อื่นๆ)
+  addCol('ALTER TABLE students ADD COLUMN recipient_type TEXT');
+  // customizable homework-notification template. Placeholders: {ผู้รับ} {ชื่อ} {หัวข้อ} {รายละเอียด} {กำหนดส่ง}
+  addCol('ALTER TABLE schools ADD COLUMN homework_message_template TEXT');
   // QR Code image (data URL) for the school's PromptPay / bank account — shown to
   // parents on the portal so they can scan-to-pay and then upload a slip.
   addCol('ALTER TABLE schools ADD COLUMN payment_qr_image TEXT');

@@ -1266,6 +1266,8 @@ function LineSettingsSection({ showToast }){
   const [savingLiff, setSavingLiff] = useState(false);
   const [inviteTpl, setInviteTpl] = useState('');
   const [savingTpl, setSavingTpl] = useState(false);
+  const [hwTpl, setHwTpl] = useState('');
+  const [savingHwTpl, setSavingHwTpl] = useState(false);
   const inp = useInpStyle();
   const slug = DATA._schoolRaw && DATA._schoolRaw.slug ? DATA._schoolRaw.slug : '';
 
@@ -1288,6 +1290,7 @@ function LineSettingsSection({ showToast }){
         if(s.notify_prefs && typeof s.notify_prefs==='object') setPrefs(s.notify_prefs);
         setContactPhone(s.contact_phone||''); setOaUrl(s.line_oa_url||''); setLiffId(s.liff_id||'');
         setInviteTpl(s.invite_message_template||'');
+        setHwTpl(s.homework_message_template||'');
         if(s.line_configured && window.API.testLine){
           window.API.testLine().then(r=>{ if(r.ok) setBot(r.bot); }).catch(()=>{});
         }
@@ -1319,10 +1322,11 @@ function LineSettingsSection({ showToast }){
   };
 
   // preset invite-message styles (placeholders {ชื่อ} {ลิงก์} filled in when copying)
+  // {ผู้รับ} auto-fills the right greeting per student (พ่อแม่ / เรียนเอง / พี่ / ญาติ)
   const INVITE_PRESETS = {
-    warm: "สวัสดีค่ะ คุณพ่อคุณแม่ของน้อง{ชื่อ} 💖\nเพื่อให้คุณพ่อคุณแม่เช็กตารางเรียน ดูการบ้าน และรับแจ้งเตือนของน้องผ่าน LINE ได้สะดวก ทางโรงเรียนเตรียมระบบไว้ให้แล้วค่ะ\nแค่กดลิงก์ด้านล่างนี้ก็เชื่อมต่อได้ทันที ไม่ต้องพิมพ์รหัสเลยนะคะ 👇\n{ลิงก์}\nยินดีต้อนรับเข้าสู่ครอบครัวเรานะคะ 🌸",
-    pro: "เรียนผู้ปกครองของน้อง{ชื่อ}\nเพื่อให้คุณพ่อคุณแม่ติดตามการเข้าเรียน ตารางเรียน และใบเสร็จของน้องได้อย่างใกล้ชิด ทางสถาบันได้เปิดระบบแจ้งเตือนผ่าน LINE เรียบร้อยแล้วค่ะ\nรบกวนกดลิงก์ด้านล่างเพื่อเชื่อมต่อ (ใช้เวลาไม่เกิน 30 วินาที) 👇\n{ลิงก์}\nขอบพระคุณสำหรับความไว้วางใจค่ะ",
-    quick: "คุณแม่น้อง{ชื่อ}คะ 🥰\nรบกวนกดลิงก์นี้เพื่อเชื่อมระบบรับแจ้งเตือนตารางเรียน/การบ้านของน้องกับทางโรงเรียนนะคะ กดปุ่มเดียวเสร็จเลย ไม่ต้องกรอกรหัสค่ะ 👇\n{ลิงก์}\nขอบคุณมากค่ะ",
+    warm: "สวัสดีค่ะ {ผู้รับ} 💖\nเพื่อให้เช็กตารางเรียน ดูการบ้าน และรับแจ้งเตือนผ่าน LINE ได้สะดวก ทางโรงเรียนเตรียมระบบไว้ให้แล้วค่ะ\nแค่กดลิงก์ด้านล่างนี้ก็เชื่อมต่อได้ทันที ไม่ต้องพิมพ์รหัสเลยนะคะ 👇\n{ลิงก์}\nยินดีต้อนรับเข้าสู่ครอบครัวเรานะคะ 🌸",
+    pro: "เรียน {ผู้รับ}\nเพื่อให้ติดตามการเข้าเรียน ตารางเรียน และใบเสร็จได้อย่างใกล้ชิด ทางสถาบันได้เปิดระบบแจ้งเตือนผ่าน LINE เรียบร้อยแล้วค่ะ\nรบกวนกดลิงก์ด้านล่างเพื่อเชื่อมต่อ (ใช้เวลาไม่เกิน 30 วินาที) 👇\n{ลิงก์}\nขอบพระคุณสำหรับความไว้วางใจค่ะ",
+    quick: "สวัสดีค่ะ {ผู้รับ} 🥰\nรบกวนกดลิงก์นี้เพื่อเชื่อมระบบรับแจ้งเตือนตารางเรียน/การบ้านกับทางโรงเรียนนะคะ กดปุ่มเดียวเสร็จเลย ไม่ต้องกรอกรหัสค่ะ 👇\n{ลิงก์}\nขอบคุณมากค่ะ",
   };
   const saveInviteTpl = async()=>{
     setSavingTpl(true);
@@ -1333,6 +1337,24 @@ function LineSettingsSection({ showToast }){
       showToast(v?'บันทึกข้อความเชิญแล้ว ✓ — ปุ่มคัดลอกในโปรไฟล์นักเรียนจะใช้ข้อความนี้':'ล้างข้อความแล้ว — ปุ่มคัดลอกจะคัดลอกเฉพาะลิงก์');
     }catch(ex){ showToast(ex.message||'บันทึกไม่สำเร็จ','error'); }
     setSavingTpl(false);
+  };
+
+  // default homework message (shown as the placeholder so owners see the built-in text)
+  const HW_DEFAULT = "📚 แจ้งการบ้านของน้อง{ชื่อ}\n\n📝 {หัวข้อ}\n{รายละเอียด}\n⏰ ส่งภายใน {กำหนดส่ง}\n\nรบกวนช่วยดูแลน้องฝึกด้วยนะคะ 😊";
+  const HW_PRESETS = {
+    warm: "สวัสดีค่ะ {ผู้รับ} 💕\n\n📚 แจ้งการบ้าน: {หัวข้อ}\n{รายละเอียด}\n⏰ ส่งภายใน {กำหนดส่ง}\n\nฝากช่วยฝึกซ้อมด้วยนะคะ ขอบคุณค่ะ 😊",
+    pro: "เรียน {ผู้รับ}\n\nการบ้านครั้งนี้: {หัวข้อ}\nรายละเอียด: {รายละเอียด}\nกำหนดส่ง: {กำหนดส่ง}\n\nรบกวนกำกับดูแลการฝึกซ้อมด้วยค่ะ ขอบพระคุณค่ะ",
+    quick: "📝 {ผู้รับ}: การบ้าน {หัวข้อ}\n{รายละเอียด}\nส่งภายใน {กำหนดส่ง} ค่ะ",
+  };
+  const saveHwTpl = async()=>{
+    setSavingHwTpl(true);
+    try{
+      const v = hwTpl.trim();
+      await window.API.updateSchool({ homework_message_template: v });
+      DATA._schoolRaw = { ...(DATA._schoolRaw||{}), homework_message_template: v||null };
+      showToast(v?'บันทึกข้อความแจ้งการบ้านแล้ว ✓':'ล้างข้อความแล้ว — จะใช้ข้อความมาตรฐานของระบบ');
+    }catch(ex){ showToast(ex.message||'บันทึกไม่สำเร็จ','error'); }
+    setSavingHwTpl(false);
   };
 
   const saveLiff = async()=>{
@@ -1520,13 +1542,33 @@ function LineSettingsSection({ showToast }){
           </div>
           <textarea style={{ ...inp, minHeight:140, lineHeight:1.6, resize:'vertical', fontFamily:'inherit' }}
             value={inviteTpl} onChange={e=>setInviteTpl(e.target.value)}
-            placeholder={"เว้นว่างไว้ = คัดลอกเฉพาะลิงก์ (เหมือนเดิม)\n\nหรือพิมพ์ข้อความเอง ใช้ {ชื่อ} แทนชื่อน้อง และ {ลิงก์} แทนลิงก์เชื่อมต่อ"}/>
+            placeholder={"เว้นว่างไว้ = คัดลอกเฉพาะลิงก์ (เหมือนเดิม)\n\nหรือพิมพ์ข้อความเอง ใช้ {ผู้รับ} แทนคำขึ้นต้น {ชื่อ} แทนชื่อน้อง และ {ลิงก์} แทนลิงก์เชื่อมต่อ"}/>
           <div style={{ fontSize:12, color:'var(--text-3)', marginTop:8, lineHeight:1.6 }}>
-            ตัวแทนที่ใช้ได้: <code style={codeBox}>{'{ชื่อ}'}</code> = ชื่อเล่นน้อง · <code style={codeBox}>{'{ลิงก์}'}</code> = ลิงก์เชื่อมอัตโนมัติ
+            ตัวแทนที่ใช้ได้: <code style={codeBox}>{'{ผู้รับ}'}</code> = คำขึ้นต้นตามผู้รับ (เช่น "คุณพ่อคุณแม่ของน้องเอย") · <code style={codeBox}>{'{ชื่อ}'}</code> = ชื่อเล่นน้อง · <code style={codeBox}>{'{ลิงก์}'}</code> = ลิงก์เชื่อมอัตโนมัติ
             {inviteTpl.length>0 && !inviteTpl.includes('{ลิงก์}') && <span style={{ color:'var(--danger)', display:'block', marginTop:4 }}>⚠️ ยังไม่มี {'{ลิงก์}'} ในข้อความ — ระบบจะต่อลิงก์ท้ายข้อความให้</span>}
           </div>
           <button className="btn btn-primary" style={{ alignSelf:'flex-start', marginTop:12, padding:'9px 22px', fontWeight:700 }}
             disabled={savingTpl} onClick={saveInviteTpl}>{savingTpl?'กำลังบันทึก…':'บันทึกข้อความ'}</button>
+        </SettingsCard>
+      )}
+
+      {/* customizable homework-notification message — sent to parents when "notify" is ticked on assign */}
+      {configured && (
+        <SettingsCard title="ข้อความแจ้งการบ้านผ่าน LINE" sub="ข้อความที่ส่งหาผู้รับเมื่อมอบหมายการบ้านพร้อมติ๊กแจ้ง LINE — {ผู้รับ} จะปรับคำให้อัตโนมัติตาม 'ผู้รับแจ้งเตือน' ของนักเรียนแต่ละคน">
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
+            <span style={{ fontSize:12.5, color:'var(--text-3)', alignSelf:'center' }}>เลือกสไตล์สำเร็จรูป:</span>
+            <button className="btn btn-sm" style={{ fontSize:12.5 }} onClick={()=>setHwTpl(HW_PRESETS.warm)}>🌸 อบอุ่น กันเอง</button>
+            <button className="btn btn-sm" style={{ fontSize:12.5 }} onClick={()=>setHwTpl(HW_PRESETS.pro)}>🎓 มืออาชีพ</button>
+            <button className="btn btn-sm" style={{ fontSize:12.5 }} onClick={()=>setHwTpl(HW_PRESETS.quick)}>⚡ กระชับ</button>
+          </div>
+          <textarea style={{ ...inp, minHeight:130, lineHeight:1.6, resize:'vertical', fontFamily:'inherit' }}
+            value={hwTpl} onChange={e=>setHwTpl(e.target.value)}
+            placeholder={"เว้นว่างไว้ = ใช้ข้อความมาตรฐานของระบบ:\n\n"+HW_DEFAULT}/>
+          <div style={{ fontSize:12, color:'var(--text-3)', marginTop:8, lineHeight:1.7 }}>
+            ตัวแทนที่ใช้ได้: <code style={codeBox}>{'{ผู้รับ}'}</code> คำขึ้นต้นตามผู้รับ · <code style={codeBox}>{'{ชื่อ}'}</code> ชื่อเล่นน้อง · <code style={codeBox}>{'{หัวข้อ}'}</code> หัวข้อการบ้าน · <code style={codeBox}>{'{รายละเอียด}'}</code> · <code style={codeBox}>{'{กำหนดส่ง}'}</code>
+          </div>
+          <button className="btn btn-primary" style={{ alignSelf:'flex-start', marginTop:12, padding:'9px 22px', fontWeight:700 }}
+            disabled={savingHwTpl} onClick={saveHwTpl}>{savingHwTpl?'กำลังบันทึก…':'บันทึกข้อความ'}</button>
         </SettingsCard>
       )}
 
