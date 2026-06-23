@@ -924,7 +924,7 @@ function StarInput({ value, onChange, size=26 }){
       {[1,2,3,4,5].map(i=>(
         <span key={i} onClick={()=>onChange(i===value?0:i)} role="button"
           style={{ cursor:"pointer", fontSize:size, lineHeight:1, userSelect:"none",
-            color: i<=(value||0) ? "var(--warn,#f59e0b)" : "var(--border)" }}>★</span>
+            color: i<=(value||0) ? "var(--warn,#F97316)" : "var(--border)" }}>★</span>
       ))}
     </span>
   );
@@ -1515,7 +1515,7 @@ async function printTeacherPaySlip(t, month){
   .sub{color:#666;font-size:12px;margin-bottom:18px}.teacher{font-size:18px;font-weight:700;margin:12px 0 4px}
   hr{border:none;border-top:1px dashed #ccc;margin:14px 0}
   .row{display:flex;justify-content:space-between;margin:6px 0}.label{color:#555}.val{font-weight:600}
-  .total{font-size:22px;font-weight:800;color:#0D9488;margin:4px 0}
+  .total{font-size:22px;font-weight:800;color:#009488;margin:4px 0}
   .muted{color:#999;font-size:12px}
   table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
   th{text-align:left;padding:5px 4px;border-bottom:1px solid #e5e7eb;color:#777;font-weight:600}
@@ -1611,7 +1611,7 @@ function AddTeacherDrawer({ onClose, onSaved }){
       DATA.TEACHERS.push({ id:'t'+(DATA.TEACHERS.length+1), _dbId:null,
         nick:f.name, name:f.name, cats:f.categories.slice(),
         rate:parseFloat(f.hourly_rate)||0, hours:0, phone:f.phone||'-',
-        color:'#0D9488', students:0 });
+        color:'#009488', students:0 });
       bumpData(); onSaved();
     }
   };
@@ -1740,7 +1740,7 @@ function printReceipt(inv){
   const isPaid = inv.status === 'paid';
   const isPending = inv.status === 'pending_verification';
   const docTitle = isPaid ? 'ใบเสร็จรับเงิน' : 'ใบแจ้งหนี้';
-  const stampColor = isPaid ? '#0D9488' : isPending ? '#7c3aed' : '#d97706';
+  const stampColor = isPaid ? '#009488' : isPending ? '#7c3aed' : '#d97706';
   const stampLabel = isPaid ? '✓ ชำระแล้ว' : isPending ? '⏳ รอตรวจสอบสลิป' : '⚠ รอชำระเงิน';
   const discountAmt = (inv.subtotal||0) > (inv.amount||0) ? (inv.subtotal||0) - (inv.amount||0) : 0;
   const THMON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -1758,14 +1758,14 @@ function printReceipt(inv){
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Sarabun',sans-serif;background:#f0f5f4;color:#1a2b29;font-size:15px;-webkit-font-smoothing:antialiased}
   .page{max-width:640px;margin:24px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 6px 32px rgba(0,0,0,.12)}
-  .hdr{background:linear-gradient(135deg,#0a7a70,#0D9488 55%,#11a393);color:#fff;padding:32px 40px 28px;text-align:center}
+  .hdr{background:linear-gradient(135deg,#0a7a70,#009488 55%,#11a393);color:#fff;padding:32px 40px 28px;text-align:center}
   .school-name{font-size:21px;font-weight:800;margin-bottom:3px;letter-spacing:.2px}
   .school-sub{font-size:13px;opacity:.85;margin-bottom:2px}
   .doc-badge{display:inline-block;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);border-radius:20px;padding:3px 14px;font-size:12px;letter-spacing:1px;margin-top:10px}
   .body{padding:28px 40px}
   .meta-row{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:18px;border-bottom:1.5px solid #e5ecea;margin-bottom:20px}
   .inv-no-box .lbl{font-size:11px;color:#9ab0aa;font-weight:600;letter-spacing:.6px;margin-bottom:3px}
-  .inv-no{font-size:24px;font-weight:800;color:#0D9488;font-variant-numeric:tabular-nums}
+  .inv-no{font-size:24px;font-weight:800;color:#009488;font-variant-numeric:tabular-nums}
   .date-box{text-align:right;font-size:13px;color:#6b7c79;line-height:1.8}
   .date-box b{color:#1a2b29;font-size:14px}
   .section{background:#f7faf9;border-radius:12px;padding:14px 18px;margin-bottom:16px}
@@ -1777,9 +1777,9 @@ function printReceipt(inv){
   .disc-row{display:flex;justify-content:space-between;font-size:14px;margin:4px 0;color:#6b7c79}
   .disc-row .disc-val{color:#dc2626;font-weight:600}
   .divider{border:none;border-top:1.5px dashed #c4d8d4;margin:10px 0}
-  .total-row{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:2px solid #0D9488}
+  .total-row{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:2px solid #009488}
   .total-lbl{font-size:16px;font-weight:700}
-  .total-val{font-size:28px;font-weight:800;color:#0D9488;line-height:1}
+  .total-val{font-size:28px;font-weight:800;color:#009488;line-height:1}
   .stamp-wrap{text-align:center;margin-bottom:6px}
   .stamp{display:inline-block;padding:8px 28px;border-radius:10px;font-weight:800;font-size:16px;border:3px solid ${stampColor};color:${stampColor}}
   .footer{text-align:center;padding:18px 40px;border-top:1px solid #e5ecea;font-size:12.5px;color:#9ab0aa;line-height:1.8}
@@ -1806,7 +1806,7 @@ function printReceipt(inv){
       </div>
       <div class="date-box">
         <div>วันที่ออกบิล</div><div><b>${fmtD(inv.date)}</b></div>
-        ${inv.paid_at?`<div style="margin-top:4px">วันที่ชำระ</div><div style="color:#0D9488;font-weight:700">${fmtD(inv.paid_at)}</div>`:''}
+        ${inv.paid_at?`<div style="margin-top:4px">วันที่ชำระ</div><div style="color:#009488;font-weight:700">${fmtD(inv.paid_at)}</div>`:''}
       </div>
     </div>
     <div class="section">

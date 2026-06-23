@@ -13,7 +13,7 @@
   --text-3: #888888;
 
   /* brand blue primary */
-  --primary:      #0D9488;
+  --primary:      #009488;
   --primary-ink:  #0F766E;
   --primary-soft: #F0FDFA;
   --primary-soft2:#CCFBF1;
@@ -48,8 +48,8 @@
   --shadow-md: 0 4px 14px rgba(17,17,17,0.07), 0 2px 6px rgba(17,17,17,0.05);
   --shadow-lg: 0 18px 50px rgba(17,17,17,0.14), 0 8px 20px rgba(17,17,17,0.08);
 
-  --ff-ui: "Work Sans","IBM Plex Sans Thai",system-ui,sans-serif;
-  --ff-display: "Work Sans","IBM Plex Sans Thai",system-ui,sans-serif;
+  --ff-ui: "Instrument Sans","IBM Plex Sans Thai",system-ui,sans-serif;
+  --ff-display: "Bricolage Grotesque","IBM Plex Sans Thai",system-ui,sans-serif;
   --ff-mono: "DM Mono","IBM Plex Sans Thai",ui-monospace,monospace;
 }
 
@@ -80,7 +80,10 @@ button{ font-family:inherit; cursor:pointer; }
   width:248px; flex:0 0 248px; background:#111111;
   border-right:1px solid #1f1f1f; display:flex; flex-direction:column;
   padding:18px 14px; gap:6px;
+  height:100vh; max-height:100vh; overflow-y:auto; overscroll-behavior:contain;
 }
+/* keep the footer (near-limit card + user chip) from being squeezed when the menu is tall */
+.sidebar .side-foot{ flex-shrink:0; }
 .brand{ display:flex; align-items:center; gap:11px; padding:6px 8px 16px; }
 .brand-mark{
   width:40px; height:40px; border-radius:12px; flex:0 0 40px;
@@ -286,7 +289,20 @@ tbody tr:hover{ background:var(--surface-2); }
   .mobnav button{ border:0; background:transparent; display:flex; flex-direction:column; align-items:center; gap:2px; flex:1 0 auto; min-width:50px; color:var(--text-3); font-size:9.5px; font-weight:600; border-radius:9px; padding:3px 4px; }
   .mobnav button.active{ color:var(--primary-ink); }
   .drawer{ width:100%; max-width:100%; }
+  /* data tables: let cards scroll sideways instead of clipping columns (overrides inline overflow:hidden) */
+  .card:has(> table){ overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
+  .card > table{ min-width:480px; }
 }
 @media (max-width:560px){
   .stat-grid{ grid-template-columns:1fr 1fr; gap:10px; }
+
+  /* Attendance & Homework rows: the fixed action buttons (มาเรียน/ลา/ขาด, LINE/ทำเสร็จ)
+     used to squeeze the name/title to ~1ch wide → text wrapped vertically one char per
+     line. On phones, wrap those button groups onto their own full-width line below. */
+  .att-row{ flex-wrap:wrap; row-gap:10px; }
+  .att-row .seg{ flex-basis:100%; justify-content:space-between; }
+  .att-row .seg-btn{ flex:1; text-align:center; padding:8px 4px; }
+
+  .hw-card{ flex-wrap:wrap; row-gap:12px; }
+  .hw-card .hw-actions{ flex-basis:100%; justify-content:flex-end; }
 }

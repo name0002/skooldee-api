@@ -10,17 +10,17 @@
   --border:    #EDEAE6;
   --border-2:  #C8C5C0;
 
-  --terra:      #0D9488;
+  --terra:      #009488;
   --terra-ink:  #0F766E;
   --terra-soft: #F0FDFA;
   --terra-2:    #115E59;
   --sky:        #5EEAD4;
 
-  --accent:      #F59E0B;
+  --accent:      #F97316;
   --accent-ink:  #B45309;
   --accent-soft: #FEF3C7;
 
-  --c-piano:  #0D9488;
+  --c-piano:  #009488;
   --c-sing:   oklch(0.63 0.155 25);
   --c-dance:  oklch(0.62 0.15 340);
   --c-drums:  oklch(0.66 0.125 70);
@@ -34,14 +34,15 @@
   --sh-lg: 0 34px 90px rgba(17,17,17,0.16), 0 12px 30px rgba(17,17,17,0.09);
   --maxw: 1180px;
 
-  --ff: "Work Sans","IBM Plex Sans Thai",system-ui,sans-serif;
-  --ff-d: "Work Sans","IBM Plex Sans Thai",system-ui,sans-serif;
+  --ff: "Instrument Sans","IBM Plex Sans Thai",system-ui,sans-serif;
+  --ff-d: "Bricolage Grotesque","IBM Plex Sans Thai",system-ui,sans-serif;
   --ff-mono: "DM Mono",ui-monospace,monospace;
 }
 *{ box-sizing:border-box; }
-html{ scroll-behavior:smooth; }
+html{ scroll-behavior:smooth; overflow-x:hidden; }
 body{
   margin:0; font-family:var(--ff); background:var(--bg); color:var(--ink);
+  overflow-x:hidden; /* safety net: nothing should ever push the page wider than the viewport */
   -webkit-font-smoothing:antialiased; line-height:1.6; font-size:16px;
 }
 h1,h2,h3{ font-family:var(--ff-d); font-weight:700; letter-spacing:-0.02em; line-height:1.12; margin:0; }
@@ -224,6 +225,13 @@ footer{ padding:60px 0 40px; border-top:1px solid var(--border); margin-top:88px
 }
 @media (max-width:560px){
   .wrap{ padding:0 18px; }
+  /* nav: stop the CTA buttons from pushing past the viewport on phones */
+  .nav-in{ gap:8px; height:62px; }
+  .logo{ font-size:18px; gap:8px; }
+  .logo-mark{ width:34px; height:34px; }
+  .nav-cta{ gap:7px; }
+  .nav-cta .btn{ padding:8px 12px; font-size:13.5px; border-radius:9px; }
+  .nav-hide-sm{ display:none; }   /* "ดูตัวอย่างระบบ" — still reachable from the hero CTA */
   .hero h1{ font-size:34px; }
   .hero h1 .hl{ white-space:normal; }
   .sec-head h2{ font-size:30px; }

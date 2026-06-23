@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ต่อคอร์ส — skooldee</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --teal:#009488; --teal-soft:#E6F6F4; --ink:#1A1A1A; --ink-2:#555; --ink-3:#8A8A8A; --bg:#F5F5F4; --line:#E7E5E4; --radius:16px; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:'Instrument Sans','Sarabun',system-ui,sans-serif; background:var(--bg); color:var(--ink); line-height:1.55;
+    display:flex; justify-content:center; padding:0; -webkit-font-smoothing:antialiased; }
+  .wrap{ width:100%; max-width:480px; min-height:100vh; background:#fff; }
+  .hero{ background:linear-gradient(135deg,var(--teal),#0b7d72); color:#fff; padding:30px 22px 26px; }
+  .hero .badge{ display:inline-block; font-size:12.5px; background:rgba(255,255,255,.18); padding:4px 11px; border-radius:99px; margin-bottom:12px; }
+  .hero h1{ font-size:22px; font-weight:700; }
+  .hero p{ font-size:14px; opacity:.92; margin-top:5px; }
+  .body{ padding:20px 18px 36px; }
+  .sec-title{ font-size:13px; font-weight:700; color:var(--ink-2); margin:6px 0 12px; }
+  .pkg{ border:1px solid var(--line); border-radius:var(--radius); padding:15px 16px; margin-bottom:12px;
+    display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .pkg-name{ font-weight:700; font-size:15.5px; }
+  .pkg-meta{ font-size:12.5px; color:var(--ink-3); margin-top:2px; }
+  .pkg-price{ font-weight:700; font-size:17px; color:var(--teal); white-space:nowrap; }
+  .pkg-price small{ font-weight:400; font-size:11.5px; color:var(--ink-3); display:block; text-align:right; }
+  .cta-card{ background:var(--teal-soft); border-radius:var(--radius); padding:18px 16px; margin-top:18px; text-align:center; }
+  .cta-card h3{ font-size:15.5px; }
+  .cta-card p{ font-size:13px; color:var(--ink-2); margin:5px 0 14px; }
+  .btn{ display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:13px;
+    border-radius:12px; font-weight:700; font-size:15px; text-decoration:none; border:0; cursor:pointer; margin-bottom:9px; }
+  .btn-line{ background:#06c755; color:#fff; }
+  .btn-call{ background:#fff; color:var(--teal); border:1.5px solid var(--teal); }
+  .foot{ text-align:center; font-size:11.5px; color:var(--ink-3); padding:20px; }
+  .foot a{ color:var(--teal); text-decoration:none; }
+  .state{ padding:70px 24px; text-align:center; color:var(--ink-3); }
+  .state .em{ font-size:34px; margin-bottom:10px; }
+  .skel{ height:74px; border-radius:var(--radius); background:linear-gradient(90deg,#f0efee,#f7f6f5,#f0efee);
+    background-size:200% 100%; animation:sh 1.3s infinite; margin-bottom:12px; }
+  @keyframes sh{ 0%{background-position:200% 0;} 100%{background-position:-200% 0;} }
+</style>
+</head>
+<body>
+  <div class="wrap" id="app">
+    <div class="hero"><div class="badge">🎵 ต่อคอร์ส</div><h1 id="hName">กำลังโหลด…</h1><p>ดูแพ็กเกจและต่อคอร์สเรียนต่อเนื่อง</p></div>
+    <div class="body">
+      <div class="sec-title">แพ็กเกจที่เปิดสอน</div>
+      <div id="pkgs"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+    </div>
+  </div>
+
+<script>
+  var API = (window.SKOOLDEE && window.SKOOLDEE.API_URL) || 'https://skooldee-api-production.up.railway.app';
+  function qp(k){ return new URLSearchParams(location.search).get(k); }
+  // slug comes from the rewrite (?school=) or, as a fallback, the path /<slug>/renew
+  var slug = qp('school') || (location.pathname.replace(/\/renew\/?$/,'').split('/').filter(Boolean).pop()) || '';
+  var baht = function(n){ return '฿' + Number(n||0).toLocaleString(); };
+  var durTxt = function(m){ return m>=60 ? (m%60? (m/60).toFixed(1):(m/60))+' ชม.' : m+' นาที'; };
+
+  function render(d){
+    document.getElementById('hName').textContent = d.name || 'โรงเรียน';
+    document.title = 'ต่อคอร์ส — ' + (d.name||'skooldee');
+    var pk = document.getElementById('pkgs');
+    if(!d.packages || !d.packages.length){
+      pk.innerHTML = '<div class="state" style="padding:30px 10px"><div class="em">🎵</div>โปรดติดต่อโรงเรียนเพื่อสอบถามแพ็กเกจค่ะ</div>';
+    } else {
+      pk.innerHTML = d.packages.map(function(p){
+        return '<div class="pkg"><div><div class="pkg-name">'+esc(p.name)+'</div>'+
+          '<div class="pkg-meta">'+p.sessions+' ครั้ง · '+durTxt(p.duration_min)+'/ครั้ง</div></div>'+
+          '<div class="pkg-price">'+baht(p.price)+'<small>'+baht(Math.round(p.price/(p.sessions||1)))+'/ครั้ง</small></div></div>';
+      }).join('');
+    }
+    var cta = '<div class="cta-card"><h3>สนใจต่อคอร์ส?</h3><p>ทักแชทหรือโทรหาโรงเรียนเพื่อต่อคอร์สได้เลยค่ะ</p>';
+    if(d.line_oa_url) cta += '<a class="btn btn-line" href="'+esc(d.line_oa_url)+'">💬 ทักแชท LINE</a>';
+    if(d.contact_phone) cta += '<a class="btn btn-call" href="tel:'+esc(d.contact_phone)+'">📞 โทร '+esc(d.contact_phone)+'</a>';
+    if(!d.line_oa_url && !d.contact_phone) cta += '<p style="margin:0;font-size:12.5px">ตอบกลับในแชต LINE นี้เพื่อแจ้งต่อคอร์สได้เลยค่ะ 🙏</p>';
+    cta += '</div>';
+    document.querySelector('.body').insertAdjacentHTML('beforeend', cta +
+      '<div class="foot">ขับเคลื่อนโดย <a href="https://skooldee.com">skooldee</a></div>');
+  }
+  function esc(s){ return String(s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function fail(){
+    document.getElementById('app').innerHTML =
+      '<div class="state"><div class="em">🔍</div>ไม่พบข้อมูลโรงเรียน<br><span style="font-size:12.5px">ตรวจสอบลิงก์อีกครั้ง หรือทักแชทโรงเรียนได้เลยค่ะ</span></div>';
+  }
+
+  if(!slug){ fail(); } else {
+    fetch(API + '/api/public/school/' + encodeURIComponent(slug))
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(render).catch(fail);
+  }
+</script>
+</body>
+</html>

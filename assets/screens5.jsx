@@ -606,7 +606,7 @@ function AccountSettingsSection({ showToast, go }){
 
 /* ===================== Categories Settings ===================== */
 const CAT_PALETTE = [
-  '#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6',
+  '#3B82F6','#10B981','#F97316','#EF4444','#8B5CF6',
   '#EC4899','#06B6D4','#84CC16','#F97316','#6366F1',
   '#0EA5E9','#14B8A6','#A855F7','#F43F5E','#78716C',
 ];

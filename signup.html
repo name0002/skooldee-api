@@ -4,13 +4,13 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>เริ่มทดลองใช้ฟรี 14 วัน · skooldee</title>
-<meta name="description" content="สมัครทดลองใช้ skooldee ฟรี 14 วัน ไม่ต้องใช้บัตรเครดิต — กรอกข้อมูลโรงเรียนของคุณ ทีมงานจะติดต่อกลับและช่วยตั้งค่าให้"/>
+<meta name="description" content="สมัครทดลองใช้ skooldee ฟรี 14 วัน ไม่ต้องใช้บัตรเครดิต — กรอกข้อมูลและเข้าใช้งานได้ทันที"/>
 <meta name="robots" content="noindex, follow"/>
-<meta name="theme-color" content="#0D9488"/>
+<meta name="theme-color" content="#009488"/>
 <link rel="icon" href="favicon.svg" type="image/svg+xml"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Work+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="assets/landing.css"/>
 <link rel="stylesheet" href="assets/pages.css"/>
 <script defer src="assets/site.js"></script>
@@ -20,8 +20,8 @@
 <header class="topbar">
   <div class="wrap">
     <a href="index.html" class="logo">
-      <span class="logo-mark"><svg width="34" height="34" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="8.5" fill="#0D9488"/><rect x="13" y="8.5" width="11.5" height="4" rx="2" fill="#FAFAF9"/><rect x="7" y="14" width="18" height="4" rx="2" fill="#F59E0B"/><rect x="7" y="19.5" width="11.5" height="4" rx="2" fill="#FAFAF9"/></svg></span>
-      <span><b style="color:#111111">skool</b><b style="color:#F59E0B">dee</b></span>
+      <span class="logo-mark"><img src="/assets/logo-icon.svg" width="34" height="34" alt="skooldee" style="display:block"/></span>
+      <span><b style="color:#111111">skool</b><b style="color:#F97316">dee</b></span>
     </a>
     <div class="nav-cta"><a href="demo.html" class="btn btn-ghost">ดูตัวอย่างระบบ</a></div>
   </div>
@@ -31,11 +31,11 @@
   <div class="page-head">
     <span class="eyebrow">ทดลองฟรี 14 วัน</span>
     <h1>เริ่มใช้ skooldee วันนี้</h1>
-    <p class="sub">กรอกข้อมูลโรงเรียนของคุณ ทีมงานจะติดต่อกลับภายใน 1 วันทำการเพื่อเปิดบัญชีและช่วยตั้งค่าให้ฟรี — ไม่ต้องใช้บัตรเครดิต</p>
+    <p class="sub">กรอกข้อมูลด้านล่าง ระบบจะสร้างบัญชีโรงเรียนให้ทันที — ทดลองใช้ฟรี 14 วัน ไม่ต้องใช้บัตรเครดิต</p>
   </div>
 
   <div class="form-layout">
-    <form class="card" data-lead novalidate>
+    <form class="card" data-lead data-register novalidate>
       <div class="form-body">
         <div class="field">
           <label>ชื่อโรงเรียน / สถาบัน <span class="req">*</span></label>
@@ -54,9 +54,9 @@
             <div class="field-error">กรุณากรอกช่องทางติดต่อ</div>
           </div>
           <div class="field">
-            <label>อีเมล</label>
-            <input type="email" name="email" placeholder="you@email.com"/>
-            <div class="field-error">อีเมลไม่ถูกต้อง</div>
+            <label>อีเมล <span class="req">*</span></label>
+            <input type="email" name="email" required placeholder="you@email.com" autocomplete="email"/>
+            <div class="field-error">กรุณากรอกอีเมลที่ถูกต้อง</div>
           </div>
         </div>
         <div class="field-row">
@@ -96,18 +96,31 @@
           <label>ข้อความเพิ่มเติม</label>
           <textarea name="message" placeholder="บอกเราเกี่ยวกับโรงเรียนของคุณ หรือสิ่งที่อยากให้ช่วย"></textarea>
         </div>
+        <div class="field-row">
+          <div class="field">
+            <label>รหัสผ่าน <span class="req">*</span></label>
+            <input type="password" name="password" required placeholder="อย่างน้อย 6 ตัวอักษร" autocomplete="new-password" minlength="6"/>
+            <div class="field-error">รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร</div>
+          </div>
+          <div class="field">
+            <label>ยืนยันรหัสผ่าน <span class="req">*</span></label>
+            <input type="password" name="confirm_password" required placeholder="พิมพ์รหัสผ่านอีกครั้ง" autocomplete="new-password"/>
+            <div class="field-error">รหัสผ่านไม่ตรงกัน</div>
+          </div>
+        </div>
+        <div id="reg-error" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:13.5px;color:#dc2626;margin-bottom:4px"></div>
         <label class="checkrow">
           <input type="checkbox" name="consent"/>
-          <span>ฉันยินยอมให้ skooldee เก็บและใช้ข้อมูลเพื่อติดต่อกลับ ตาม<a href="privacy.html" target="_blank">นโยบายความเป็นส่วนตัว</a> <span class="req">*</span></span>
+          <span>ฉันยินยอมให้ skooldee เก็บและใช้ข้อมูลเพื่อให้บริการ ตาม<a href="privacy.html" target="_blank">นโยบายความเป็นส่วนตัว</a> <span class="req">*</span></span>
         </label>
-        <button type="submit" class="btn btn-primary btn-lg" style="width:100%">เริ่มทดลองใช้ฟรี</button>
+        <button type="submit" class="btn btn-primary btn-lg" style="width:100%">สร้างบัญชีและเริ่มใช้งาน →</button>
       </div>
 
       <div class="form-success">
-        <div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div>
-        <h3>ได้รับข้อมูลแล้ว ขอบคุณครับ! 🎉</h3>
-        <p>ทีมงาน skooldee จะติดต่อกลับภายใน 1 วันทำการ เพื่อเปิดบัญชีทดลองและช่วยตั้งค่าให้</p>
-        <a href="index.html" class="btn btn-ghost">กลับหน้าแรก</a>
+        <div class="ic" style="background:color-mix(in oklch,#009488 12%,white);color:#009488"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div>
+        <h3>บัญชีโรงเรียนพร้อมใช้งานแล้ว! 🎉</h3>
+        <p>กำลังพาคุณเข้าสู่ระบบ skooldee…</p>
+        <a href="app.html" class="btn btn-primary" id="go-app-btn">เข้าสู่ระบบเลย →</a>
       </div>
     </form>
 

@@ -39,7 +39,7 @@ export function tplWelcome({ schoolName, ownerName, loginUrl = 'https://skooldee
   <div style="font-size:22px;font-weight:700;margin-bottom:8px">🎉 บัญชีของคุณพร้อมแล้ว!</div>
   <p>สวัสดีคุณ${ownerName},</p>
   <p><b>${schoolName}</b> ลงทะเบียนกับ skooldee สำเร็จแล้ว ทดลองใช้ได้ฟรี 14 วัน</p>
-  <a href="${loginUrl}" style="display:inline-block;margin:20px 0;padding:12px 28px;background:#0D9488;color:#fff;border-radius:10px;text-decoration:none;font-weight:700">
+  <a href="${loginUrl}" style="display:inline-block;margin:20px 0;padding:12px 28px;background:#009488;color:#fff;border-radius:10px;text-decoration:none;font-weight:700">
     เข้าสู่ระบบ skooldee →
   </a>
   <p style="color:#666;font-size:13px">มีคำถาม? ทักเราได้ที่ LINE @skooldee หรือ support@skooldee.com</p>
@@ -57,7 +57,7 @@ export function tplPasswordReset({ email, resetUrl }) {
   <div style="font-size:20px;font-weight:700;margin-bottom:8px">🔐 รีเซ็ตรหัสผ่าน</div>
   <p>เราได้รับคำขอรีเซ็ตรหัสผ่านสำหรับบัญชี <b>${email}</b></p>
   <p>กดปุ่มด้านล่างเพื่อตั้งรหัสผ่านใหม่ (ลิงก์หมดอายุใน 1 ชั่วโมง)</p>
-  <a href="${resetUrl}" style="display:inline-block;margin:20px 0;padding:12px 28px;background:#0D9488;color:#fff;border-radius:10px;text-decoration:none;font-weight:700">
+  <a href="${resetUrl}" style="display:inline-block;margin:20px 0;padding:12px 28px;background:#009488;color:#fff;border-radius:10px;text-decoration:none;font-weight:700">
     ตั้งรหัสผ่านใหม่ →
   </a>
   <p style="color:#666;font-size:13px">หากคุณไม่ได้ขอรีเซ็ต ไม่ต้องทำอะไร รหัสผ่านของคุณยังเหมือนเดิม</p>
@@ -87,7 +87,7 @@ export function tplNewEnrollment({ schoolName, studentName, parentName, phone, l
     <tr><td style="padding:8px 12px;background:#f9f9f9;font-weight:600;border-bottom:1px solid #eee;width:32%">${k}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #eee">${v}</td></tr>`).join('')}
   </table>
-  <a href="${adminUrl}" style="display:inline-block;margin:22px 0 8px;padding:12px 28px;background:#0D9488;color:#fff;border-radius:10px;text-decoration:none;font-weight:700">
+  <a href="${adminUrl}" style="display:inline-block;margin:22px 0 8px;padding:12px 28px;background:#009488;color:#fff;border-radius:10px;text-decoration:none;font-weight:700">
     ดูใบสมัคร & รับเข้าเรียน →
   </a>
   <p style="color:#999;font-size:12.5px">เปิดเมนู "นักเรียน → ผู้สมัคร" เพื่อกดรับเข้าเรียนหรือปฏิเสธ</p>
@@ -108,7 +108,7 @@ export function tplNewLead({ school, name, email, phone, category, plan }) {
     <tr><td style="padding:8px 12px;background:#f9f9f9;font-weight:600;border-bottom:1px solid #eee;width:30%">${k}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #eee">${v}</td></tr>`).join('')}
   </table>
-  <a href="https://skooldee.com/admin" style="display:inline-block;margin:20px 0;padding:10px 22px;background:#0D9488;color:#fff;border-radius:8px;text-decoration:none;font-weight:700">
+  <a href="https://skooldee.com/admin" style="display:inline-block;margin:20px 0;padding:10px 22px;background:#009488;color:#fff;border-radius:8px;text-decoration:none;font-weight:700">
     ดูใน Admin →
   </a>
 </div>`,

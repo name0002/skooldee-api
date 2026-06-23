@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="robots" content="noindex"/>
+<title>เชื่อมต่อ LINE · skooldee</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --teal:#009488; --teal-soft:#d6f0ec; --teal-dk:#0a7a70;
+    --green:#06c755; --green-dk:#05a548;
+    --red:#e53e3e; --red-soft:#fde8e8;
+    --ink:#1a2b29; --muted:#6b7c79; --line:#e7eceb; --bg:#f0f5f4;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:'Instrument Sans','Sarabun',sans-serif; background:var(--bg); color:var(--ink);
+    -webkit-font-smoothing:antialiased; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .wrap{ width:100%; max-width:380px; }
+  .card{ background:#fff; border-radius:22px; padding:30px 24px 28px; box-shadow:0 6px 24px rgba(0,0,0,.08); text-align:center; }
+  .logo{ font-weight:700; font-size:17px; color:var(--teal-dk); letter-spacing:-.01em; margin-bottom:22px; }
+  .logo span{ color:var(--teal); }
+  .spinner{ width:42px; height:42px; border:4px solid var(--teal-soft); border-top-color:var(--teal);
+    border-radius:50%; margin:18px auto; animation:spin .8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .icon-circle{ width:72px; height:72px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:38px; margin:6px auto 18px; }
+  .ok-circle{ background:var(--teal-soft); }
+  .err-circle{ background:var(--red-soft); }
+  h1{ font-size:20px; font-weight:700; margin-bottom:8px; }
+  p{ font-size:14.5px; color:var(--muted); line-height:1.65; }
+  .kid-name{ color:var(--teal-dk); font-weight:700; }
+  .btn{ display:inline-block; width:100%; margin-top:20px; padding:14px; border-radius:13px; border:0;
+    font-family:inherit; font-size:15px; font-weight:700; cursor:pointer; text-decoration:none; }
+  .btn-line{ background:var(--green); color:#fff; }
+  .btn-line:active{ background:var(--green-dk); }
+  .btn-ghost{ background:var(--bg); color:var(--ink); margin-top:10px; }
+  .hint{ font-size:12.5px; color:var(--muted); margin-top:16px; line-height:1.6; }
+  .friend-box{ margin-top:18px; padding:15px 16px; background:#f4faf9; border:1.5px solid var(--teal-soft);
+    border-radius:14px; text-align:left; }
+  .friend-box .ft{ font-weight:700; font-size:14px; margin-bottom:4px; }
+  .friend-box .fd{ font-size:12.5px; color:var(--muted); line-height:1.55; }
+  .hidden{ display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="logo">skoo<span>l</span>dee</div>
+    <div id="view"></div>
+  </div>
+</div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+  var API_BASE = "https://skooldee-api-production.up.railway.app";
+  var view = document.getElementById("view");
+
+  // token can arrive directly (?token=) or via LIFF's liff.state wrapper — read both,
+  // before and after liff.init (init restores the original query string).
+  function getToken(){
+    var q = new URLSearchParams(location.search);
+    var t = q.get("token") || q.get("t");
+    if(t) return t;
+    var st = q.get("liff.state");
+    if(st){ try{ return new URLSearchParams(st.replace(/^\?/, "")).get("token"); }catch(e){} }
+    return "";
+  }
+
+  function showLoading(msg){
+    view.innerHTML = '<div class="spinner"></div><p>'+(msg||"กำลังเชื่อมต่อ…")+'</p>';
+  }
+  function showError(title, detail){
+    view.innerHTML =
+      '<div class="icon-circle err-circle">!</div>'+
+      '<h1>'+title+'</h1>'+
+      '<p>'+(detail||"")+'</p>'+
+      '<p class="hint">หากยังไม่ได้ รบกวนติดต่อทางโรงเรียนเพื่อขอลิงก์ใหม่นะคะ 🙏</p>';
+  }
+  function nameOf(stu){ return stu && (stu.nickname || stu.name) || "บุตรหลาน"; }
+
+  function showSuccess(stu, school, friend){
+    var friendHtml = "";
+    if(friend && friend.add_url && !friend.is_friend){
+      friendHtml =
+        '<div class="friend-box">'+
+          '<div class="ft">อีกขั้นเดียว! เพิ่มเพื่อนเพื่อรับแจ้งเตือน</div>'+
+          '<div class="fd">กดปุ่มด้านล่างเพื่อเพิ่ม '+(school||"โรงเรียน")+' เป็นเพื่อน แล้วคุณจะได้รับข่าวสารและการบ้านของน้องผ่าน LINE นี้ค่ะ</div>'+
+        '</div>'+
+        '<a class="btn btn-line" href="'+friend.add_url+'">➕ เพิ่มเพื่อน LINE</a>';
+    }
+    view.innerHTML =
+      '<div class="icon-circle ok-circle">✓</div>'+
+      '<h1>เชื่อมต่อสำเร็จ</h1>'+
+      '<p>คุณจะได้รับแจ้งเตือนของ <span class="kid-name">น้อง'+nameOf(stu)+'</span> ผ่าน LINE นี้แล้วค่ะ 🎉</p>'+
+      friendHtml+
+      '<button class="btn btn-ghost" onclick="closeWin()">ปิดหน้านี้</button>';
+  }
+  function closeWin(){ try{ if(window.liff && liff.closeWindow) liff.closeWindow(); else window.close(); }catch(e){} }
+  window.closeWin = closeWin;
+
+  async function run(){
+    showLoading("กำลังเตรียมข้อมูล…");
+    var token = getToken();
+    if(!token){ showError("ลิงก์ไม่ถูกต้อง", "ไม่พบรหัสในลิงก์"); return; }
+
+    // 1) fetch page info (liff id + child name)
+    var info;
+    try{
+      var res = await fetch(API_BASE + "/api/public/link-info/" + encodeURIComponent(token));
+      if(!res.ok) throw new Error("notfound");
+      info = await res.json();
+    }catch(e){ showError("ไม่พบข้อมูล", "ลิงก์อาจหมดอายุหรือไม่ถูกต้อง"); return; }
+
+    if(!info.liff_id){
+      showError("ยังไม่ได้ตั้งค่า", "ทางโรงเรียนยังไม่ได้เปิดใช้การเชื่อมต่ออัตโนมัติค่ะ"); return;
+    }
+
+    var addUrl = info.oa_basic_id ? ("https://line.me/R/ti/p/"+encodeURIComponent(info.oa_basic_id)) : "";
+
+    // 2) init LIFF + ensure logged in
+    try{
+      await liff.init({ liffId: info.liff_id });
+    }catch(e){ showError("เปิดไม่สำเร็จ", "ไม่สามารถเริ่มการเชื่อมต่อ LINE ได้"); return; }
+
+    if(!liff.isLoggedIn()){
+      // kick off LINE login; on return the page reloads and we continue
+      liff.login({ redirectUri: location.href });
+      return;
+    }
+
+    showLoading("กำลังเชื่อมต่อบัญชี LINE…");
+
+    // 3) verify on the server with the LIFF access token (server reads the real userId)
+    var accessToken = "";
+    try{ accessToken = liff.getAccessToken() || ""; }catch(e){}
+    if(!accessToken){ showError("เชื่อมต่อไม่สำเร็จ", "ไม่สามารถอ่านข้อมูลบัญชี LINE ได้"); return; }
+
+    try{
+      var lr = await fetch(API_BASE + "/api/public/link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: token, access_token: accessToken }),
+      });
+      var data = await lr.json().catch(function(){ return {}; });
+      if(!lr.ok || !data.ok){ showError("เชื่อมต่อไม่สำเร็จ", "กรุณาลองใหม่อีกครั้งค่ะ"); return; }
+
+      // 4) check friendship so we can nudge "add friend" if needed (push needs it)
+      var isFriend = true;
+      try{ var fr = await liff.getFriendship(); isFriend = !!(fr && fr.friendFlag); }catch(e){ isFriend = true; }
+
+      showSuccess(data.student || info.student, data.school || info.school,
+        { add_url: addUrl, is_friend: isFriend });
+    }catch(e){ showError("เชื่อมต่อไม่สำเร็จ", "เกิดข้อผิดพลาด กรุณาลองใหม่ค่ะ"); }
+  }
+
+  run();
+</script>
+</body>
+</html>

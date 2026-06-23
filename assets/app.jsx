@@ -106,12 +106,7 @@ function AppLoader({ msg }){
   return (
     <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center',
                   background:'var(--surface-2)', flexDirection:'column', gap:14 }}>
-      <svg width="52" height="52" viewBox="0 0 32 32" fill="none">
-        <rect width="32" height="32" rx="8.5" fill="#0D9488"/>
-        <rect x="13" y="8.5" width="11.5" height="4" rx="2" fill="#FAFAF9"/>
-        <rect x="7" y="14" width="18" height="4" rx="2" fill="#F59E0B"/>
-        <rect x="7" y="19.5" width="11.5" height="4" rx="2" fill="#FAFAF9"/>
-      </svg>
+      <img src="/assets/logo-icon.svg" width="52" height="52" alt="skooldee"/>
       <div style={{ color:'var(--text-2)', fontSize:14 }}>{msg||'กำลังโหลด…'}</div>
     </div>
   );
@@ -146,12 +141,7 @@ function LoginScreen({ onLogin }){
 
   const Brand = ()=>(
     <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:28 }}>
-      <svg width="38" height="38" viewBox="0 0 32 32" fill="none">
-        <rect width="32" height="32" rx="8.5" fill="#0D9488"/>
-        <rect x="13" y="8.5" width="11.5" height="4" rx="2" fill="#FAFAF9"/>
-        <rect x="7" y="14" width="18" height="4" rx="2" fill="#F59E0B"/>
-        <rect x="7" y="19.5" width="11.5" height="4" rx="2" fill="#FAFAF9"/>
-      </svg>
+      <img src="/assets/logo-icon.svg" width="38" height="38" alt="skooldee"/>
       <div>
         <div style={{ fontWeight:700, fontSize:18, fontFamily:'var(--ff-display)' }}>skooldee</div>
         <div style={{ fontSize:11.5, color:'var(--text-3)' }}>ระบบจัดการโรงเรียนกวดวิชา</div>
@@ -379,7 +369,7 @@ function AuthRoot(){
         id:t.id, _dbId:t.id, nick:t.name, name:t.name,
         cats:(function(){ try{ if(t.categories_json){ var a=JSON.parse(t.categories_json); if(Array.isArray(a)&&a.length) return a; } }catch(e){} return t.category?[t.category]:[]; })(),
         rate:t.hourly_rate||0, hours:0,
-        phone:t.phone||'-', color:'#0D9488',
+        phone:t.phone||'-', color:'#009488',
         students:DATA.STUDENTS.filter(s=>s.teacher===t.name).length,
       }));
 
@@ -622,7 +612,7 @@ function AuthRoot(){
         DATA.TEACHERS.push({ id:t.id, _dbId:t.id, nick:t.name, name:t.name,
           cats:(function(){ try{ if(t.categories_json){ var a=JSON.parse(t.categories_json); if(Array.isArray(a)&&a.length) return a; } }catch(e){} return t.category?[t.category]:[]; })(),
           rate:t.hourly_rate||0, hours:0,
-          phone:t.phone||'-', color:'#0D9488', students:0 });
+          phone:t.phone||'-', color:'#009488', students:0 });
         bumpData(); return t;
       };
       DATA.patchTeacher = async function(dbId, apiPatch, localPatch){
@@ -913,7 +903,7 @@ const TITLES = {
 };
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "primary": "#0D9488",
+  "primary": "#009488",
   "fontBody": "Work Sans",
   "fontHead": "Work Sans",
   "nearLimit": 2,
@@ -1129,7 +1119,7 @@ function App({ liveLogout }){
       <TweaksPanel>
         <TweakSection label="สีแบรนด์"/>
         <TweakColor label="สีหลัก" value={tw.primary}
-          options={["#0D9488","#7C3AED","#0EA5E9","#059669","#E11D48"]}
+          options={["#009488","#7C3AED","#0EA5E9","#059669","#E11D48"]}
           onChange={(v)=>setTweak("primary", v)}/>
         <TweakSlider label="ความมนขอบ" value={tw.radius} min={4} max={20} step={2} unit="px"
           onChange={(v)=>setTweak("radius", v)}/>
@@ -1241,12 +1231,7 @@ function ResetPasswordScreen({ token, onDone }){
                   background:'var(--surface-2)', padding:20 }}>
       <div style={card}>
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:28 }}>
-          <svg width="38" height="38" viewBox="0 0 32 32" fill="none">
-            <rect width="32" height="32" rx="8.5" fill="#0D9488"/>
-            <rect x="13" y="8.5" width="11.5" height="4" rx="2" fill="#FAFAF9"/>
-            <rect x="7" y="14" width="18" height="4" rx="2" fill="#F59E0B"/>
-            <rect x="7" y="19.5" width="11.5" height="4" rx="2" fill="#FAFAF9"/>
-          </svg>
+          <img src="/assets/logo-icon.svg" width="38" height="38" alt="skooldee"/>
           <div>
             <div style={{ fontWeight:700, fontSize:18, fontFamily:'var(--ff-display)' }}>skooldee</div>
             <div style={{ fontSize:11.5, color:'var(--text-3)' }}>ตั้งรหัสผ่านใหม่</div>
