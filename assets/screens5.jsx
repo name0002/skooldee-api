@@ -150,16 +150,12 @@ function SchoolSettingsSection({ showToast }){
   useDataVersion(); // re-render whenever bumpData() fires (e.g. after initial data load)
   const CATS = [
     { v:'',            l:'ไม่ระบุ' },
-    { v:'piano',       l:'เปียโน' },
-    { v:'guitar',      l:'กีตาร์' },
-    { v:'violin',      l:'ไวโอลิน' },
-    { v:'singing',     l:'ร้องเพลง' },
-    { v:'dance',       l:'เต้น' },
-    { v:'drums',       l:'กลอง' },
-    { v:'art',         l:'ศิลปะ' },
-    { v:'english',     l:'ภาษาอังกฤษ' },
-    { v:'math',        l:'คณิตศาสตร์' },
-    { v:'science',     l:'วิทยาศาสตร์' },
+    { v:'music',       l:'🎵 ดนตรี' },
+    { v:'art',         l:'🎨 ศิลปะ / วาดรูป' },
+    { v:'performance', l:'🎭 การแสดง / เต้นรำ' },
+    { v:'language',    l:'🗣️ ภาษา' },
+    { v:'academic',    l:'📚 วิชาการ / กวดวิชา' },
+    { v:'sports',      l:'⚽ กีฬา' },
     { v:'other',       l:'อื่นๆ' },
   ];
 
