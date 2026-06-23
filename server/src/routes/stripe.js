@@ -13,11 +13,12 @@ function getStripe() {
 }
 
 // plan key → { plan label, env var holding the Stripe Price ID }
+// ENTERPRISE is sales-led (contact form), so no self-serve checkout price here.
 const PLAN_PRICES = {
-  starter_mo: { plan: 'starter', env: 'STRIPE_PRICE_STARTER_MO' },
-  starter_yr: { plan: 'starter', env: 'STRIPE_PRICE_STARTER_YR' },
-  pro_mo:     { plan: 'pro',     env: 'STRIPE_PRICE_PRO_MO' },
-  pro_yr:     { plan: 'pro',     env: 'STRIPE_PRICE_PRO_YR' },
+  studio_mo:  { plan: 'studio',  env: 'STRIPE_PRICE_STUDIO_MO' },
+  studio_yr:  { plan: 'studio',  env: 'STRIPE_PRICE_STUDIO_YR' },
+  academy_mo: { plan: 'academy', env: 'STRIPE_PRICE_ACADEMY_MO' },
+  academy_yr: { plan: 'academy', env: 'STRIPE_PRICE_ACADEMY_YR' },
 };
 
 function getPriceId(planKey) {

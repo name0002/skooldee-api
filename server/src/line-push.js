@@ -1,4 +1,5 @@
 import { get } from './db.js';
+import { planAllows } from './plans.js';
 
 /**
  * Fire-and-forget LINE push to a student's linked parent.
@@ -16,8 +17,9 @@ import { get } from './db.js';
  */
 export async function pushToParent(schoolId, studentId, text) {
   try {
-    const school = get('SELECT line_token FROM schools WHERE id = ?', schoolId);
+    const school = get('SELECT line_token, plan, plan_expires FROM schools WHERE id = ?', schoolId);
     if (!school || !school.line_token) return { sent: false, reason: 'no_token' };
+    if (!planAllows(school, 'line')) return { sent: false, reason: 'plan' };
     const stu = get('SELECT line_user_id FROM students WHERE id = ? AND school_id = ?', studentId, schoolId);
     if (!stu || !stu.line_user_id) return { sent: false, reason: 'not_linked' };
     const res = await fetch('https://api.line.me/v2/bot/message/push', {
@@ -31,8 +33,9 @@ export async function pushToParent(schoolId, studentId, text) {
 
 export async function maybeNotify(schoolId, studentId, eventKey, text) {
   try {
-    const school = get('SELECT line_token, notify_prefs FROM schools WHERE id = ?', schoolId);
+    const school = get('SELECT line_token, notify_prefs, plan, plan_expires FROM schools WHERE id = ?', schoolId);
     if (!school || !school.line_token) return;
+    if (!planAllows(school, 'line')) return; // LINE notifications require a paid plan
     let prefs = {};
     try { prefs = school.notify_prefs ? JSON.parse(school.notify_prefs) : {}; } catch { prefs = {}; }
     if (!prefs[eventKey]) return; // opt-in: silent unless explicitly enabled
@@ -62,8 +65,9 @@ export async function pushRaw(token, to, text, quickReply) {
 /** Direct push to a teacher's linked LINE (explicit/event-driven, not pref-gated). */
 export async function pushToTeacher(schoolId, teacherId, text) {
   try {
-    const school = get('SELECT line_token FROM schools WHERE id = ?', schoolId);
+    const school = get('SELECT line_token, plan, plan_expires FROM schools WHERE id = ?', schoolId);
     if (!school || !school.line_token) return { sent: false, reason: 'no_token' };
+    if (!planAllows(school, 'line')) return { sent: false, reason: 'plan' };
     const t = get('SELECT line_user_id FROM teachers WHERE id = ? AND school_id = ?', teacherId, schoolId);
     if (!t || !t.line_user_id) return { sent: false, reason: 'not_linked' };
     const ok = await pushRaw(school.line_token, t.line_user_id, text);
@@ -74,8 +78,9 @@ export async function pushToTeacher(schoolId, teacherId, text) {
 /** Pref-gated teacher push — used for automatic events (class cancelled, student absent). */
 export async function maybeNotifyTeacher(schoolId, teacherId, eventKey, text) {
   try {
-    const school = get('SELECT line_token, notify_prefs FROM schools WHERE id = ?', schoolId);
+    const school = get('SELECT line_token, notify_prefs, plan, plan_expires FROM schools WHERE id = ?', schoolId);
     if (!school || !school.line_token) return;
+    if (!planAllows(school, 'line')) return;
     let prefs = {};
     try { prefs = school.notify_prefs ? JSON.parse(school.notify_prefs) : {}; } catch { prefs = {}; }
     if (!prefs[eventKey]) return;

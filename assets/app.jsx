@@ -1084,9 +1084,9 @@ function App({ liveLogout }){
                 </div>
                 {!expired && daysLeft!==null && daysLeft<=3 &&
                   <div style={{ fontSize:11.5, color:'var(--text-2)', marginBottom:8 }}>อัปเกรดเพื่อใช้งานต่อไม่ขาดตอน</div>}
-                <button disabled={upgrading} onClick={()=>doUpgrade('pro','mo')}
+                <button disabled={upgrading} onClick={()=>doUpgrade('academy','mo')}
                   className="btn btn-primary" style={{ width:'100%', fontSize:12.5, padding:'7px 10px' }}>
-                  {upgrading ? 'กำลังโหลด…' : 'อัปเกรด ฿1,290/เดือน'}
+                  {upgrading ? 'กำลังโหลด…' : 'อัปเกรด ฿1,990/เดือน'}
                 </button>
               </div>
             );

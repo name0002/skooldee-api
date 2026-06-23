@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { wrap, required } from '../util.js';
 import { get, run } from '../db.js';
+import { planAllows } from '../plans.js';
 
 const r = Router();
 
@@ -24,8 +25,17 @@ const r = Router();
 r.post('/line', wrap(async (req, res) => {
   const { message, student_id } = required(req.body, ['message']);
   // prefer the school's own token (set in Settings), fall back to a global env token
-  const school = get('SELECT line_token FROM schools WHERE id = ?', req.schoolId);
+  const school = get('SELECT line_token, plan, plan_expires FROM schools WHERE id = ?', req.schoolId);
   const token = (school && school.line_token) || process.env.LINE_CHANNEL_ACCESS_TOKEN || null;
+
+  // LINE messaging is a paid-plan feature (STUDIO/expired trial cannot send)
+  if (!planAllows(school, 'line')) {
+    return res.json({
+      sent: false, plan_blocked: true,
+      note: 'การแจ้งเตือนผ่าน LINE ต้องใช้แผน ACADEMY ขึ้นไป — อัปเกรดเพื่อเปิดใช้งาน',
+      preview: message,
+    });
+  }
 
   // resolve recipient ONLY from a student in the caller's own school — never accept a
   // raw `to` userId from the body (that would let staff push to any LINE account).

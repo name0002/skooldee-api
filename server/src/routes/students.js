@@ -3,8 +3,20 @@ import crypto from 'node:crypto';
 import { all, get, run, tierOf } from '../db.js';
 import { wrap, required, bad, nearLimitInfo } from '../util.js';
 import { requirePage, ownStudentIds } from '../auth.js';
+import { effectivePlan } from '../plans.js';
 
 const r = Router();
+
+// Enforce the plan's student cap. Throws if adding `adding` students would exceed it.
+function assertStudentCap(sid, adding = 1) {
+  const sch = get('SELECT plan, plan_expires FROM schools WHERE id = ?', sid);
+  const cap = effectivePlan(sch).students;
+  if (cap === Infinity) return;
+  const cur = get('SELECT COUNT(*) AS n FROM students WHERE school_id = ?', sid).n;
+  if (cur + adding > cap) {
+    throw bad(`แผนปัจจุบันรองรับนักเรียนสูงสุด ${cap} คน — อัปเกรดเพื่อเพิ่มได้ไม่จำกัด`, 402);
+  }
+}
 
 // editing student records needs students:manage
 const canManage = requirePage('students', 'manage');
@@ -64,6 +76,8 @@ r.post('/bulk', wrap((req, res) => {
   const list = Array.isArray(req.body.students) ? req.body.students : [];
   if (!list.length) throw bad('no students to import');
   if (list.length > 500) throw bad('too many rows (max 500)');
+  const valid = list.filter((s) => s && s.name && String(s.name).trim());
+  assertStudentCap(req.schoolId, valid.length);
   const created = [];
   for (const s of list) {
     if (!s || !s.name || !String(s.name).trim()) continue;
@@ -120,6 +134,7 @@ r.get('/:id', wrap((req, res) => {
 
 r.post('/', canManage, wrap((req, res) => {
   const b = required(req.body, ['name']);
+  assertStudentCap(req.schoolId, 1);
   res.status(201).json(insertStudent(req.schoolId, b));
 }));
 
