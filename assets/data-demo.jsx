@@ -145,6 +145,17 @@ const nearEndingInfo = (s)=>{
   return { remaining:(s.remaining||0), category:(s.cats&&s.cats[0])||null, perSubject:false };
 };
 
+// Map a /api/notify/line result → an accurate toast. The server distinguishes
+// "no token", "parent not linked", and "token rejected by LINE / network" — surface
+// each precisely so an EXPIRED token isn't mislabelled as "not configured".
+const lineResultMsg = (r, okText)=>{
+  if(r && r.sent) return okText || "ส่งผ่าน LINE แล้ว ✓";
+  if(r && r.connected) return "ผู้ปกครองยังไม่ได้เชื่อม LINE";
+  if(r && r.error==='line_api_error') return "Token LINE ใช้ไม่ได้/หมดอายุ — ตรวจที่ ตั้งค่า → LINE";
+  if(r && (r.error==='network'||r.error===true)) return "เชื่อมต่อ LINE ไม่สำเร็จ ลองใหม่อีกครั้ง";
+  return "ยังไม่ได้ตั้งค่า LINE (ไปที่ ตั้งค่า → LINE)";
+};
+
 const STATUS = {
   lead:            { label:"สนใจ",            color:"var(--c-piano)",  soft:"var(--c-piano-soft)" },
   trial_scheduled: { label:"นัดทดลองเรียน",   color:"var(--c-dance)",  soft:"var(--c-dance-soft)" },
@@ -338,7 +349,7 @@ function deleteAssessment(studentId, id){
 
 window.DATA = { SCHOOL, CATS, TEACHERS, TEACHER_BY_CAT, COURSES, STUDENTS, STATUS, DAYS, SCHEDULE, layoutDay,
   DAY_START, DAY_END, PX_PER_MIN, toMin, SLOT_TIMES, TODAY, INVOICES, PAY_STATUS, REVENUE, baht,
-  PACKAGES_DEFAULT, loadPackages, savePackagePrice, NEAR_LIMIT, isNearEnding, nearEndingInfo,
+  PACKAGES_DEFAULT, loadPackages, savePackagePrice, NEAR_LIMIT, isNearEnding, nearEndingInfo, lineResultMsg,
   updateStudent, findStudent, TODAY_KEY, TODAY_LABEL, ATT_STATUS, loadAttendance, saveAttendance,
   TIERS, tierOf, givePoints, ASSESS_CRITERIA:{}, SHOW_ASSESS_PARENTS:false, SHOW_COURSE_NO_PARENTS:false, PAYMENT_QR_IMAGE:null, SCHOOL_LOGO:null, ENROLLMENTS:[],
   listAssessments, addAssessment, deleteAssessment, NOW_KEY, HW_STATUS, HOMEWORK, addHomework, updateHomework, isOverdue, setNearLimit,

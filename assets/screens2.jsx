@@ -793,7 +793,7 @@ function StudentDrawer({ s, onClose }){
           })()}
         </>
       )}
-      {line && <LineNotify student={s} onClose={()=>setLine(false)} onSent={(r)=>{ setLine(false); showToast(r&&r.sent ? "ส่งข้อความผ่าน LINE แล้ว ✓" : r&&r.connected ? "ผู้ปกครองยังไม่ได้เชื่อม LINE" : "ยังไม่ได้ตั้งค่า LINE (ไปที่ ตั้งค่า → LINE)"); }}/>}
+      {line && <LineNotify student={s} onClose={()=>setLine(false)} onSent={(r)=>{ setLine(false); showToast(DATA.lineResultMsg(r,"ส่งข้อความผ่าน LINE แล้ว ✓")); }}/>}
       {assessOpen && <AssessModal student={s} onClose={()=>setAssessOpen(false)}
         onDone={(rec, err)=>{
           setAssessOpen(false);

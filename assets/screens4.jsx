@@ -86,7 +86,7 @@ function Homework(){
 
       {assign && <HomeworkAssign onClose={()=>setAssign(false)} onSaved={(notify)=>{ setAssign(false); showToast(notify?"มอบหมาย + แจ้ง LINE แล้ว":"บันทึกการบ้านแล้ว"); }}/>}
       {line && <LineNotify student={DATA.STUDENTS.find(s=>s._dbId===line._studentDbId)||DATA.findStudent(line.student)||{name:line.student,cats:[line.cat],dur:60,guardian:"-",phone:"-",remaining:0,_dbId:line._studentDbId||null}} homework={line}
-        onClose={()=>setLine(null)} onSent={(r)=>{ if(r&&r.sent){ DATA.updateHomework(line.id,{notified:true}); bumpData(); } setLine(null); showToast(r&&r.sent ? "ส่งการบ้านผ่าน LINE แล้ว ✓" : r&&r.connected ? "ผู้ปกครองยังไม่ได้เชื่อม LINE" : "ยังไม่ได้ตั้งค่า LINE (ไปที่ ตั้งค่า → LINE)"); }}/>}
+        onClose={()=>setLine(null)} onSent={(r)=>{ if(r&&r.sent){ DATA.updateHomework(line.id,{notified:true}); bumpData(); } setLine(null); showToast(DATA.lineResultMsg(r,"ส่งการบ้านผ่าน LINE แล้ว ✓")); }}/>}
       {toast}
     </div>
   );
@@ -270,7 +270,7 @@ function Referrals(){
 
       {invite && <ReferralInvite onClose={()=>setInvite(false)} onSaved={()=>{ setInvite(false); showToast("เพิ่มการแนะนำแล้ว"); }}/>}
       {line && <LineNotify student={(()=>{ const s=DATA.STUDENTS.find(x=>x._dbId===line._referrerDbId)||DATA.findStudent(line.referrer)||{name:line.referrer,cats:[line.cat],dur:60,guardian:"-",phone:"-",remaining:0,points:0,_dbId:line._referrerDbId||null}; return {...s, _refFriend:line.friend}; })()}
-        referral={line} onClose={()=>setLine(null)} onSent={(r)=>{ setLine(null); showToast(r&&r.sent ? "ส่งโค้ดแนะนำผ่าน LINE แล้ว ✓" : r&&r.connected ? "ผู้ปกครองยังไม่ได้เชื่อม LINE" : "ยังไม่ได้ตั้งค่า LINE (ไปที่ ตั้งค่า → LINE)"); }}/>}
+        referral={line} onClose={()=>setLine(null)} onSent={(r)=>{ setLine(null); showToast(DATA.lineResultMsg(r,"ส่งโค้ดแนะนำผ่าน LINE แล้ว ✓")); }}/>}
       {toast}
     </div>
   );
