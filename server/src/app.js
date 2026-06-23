@@ -21,6 +21,7 @@ import publicRoutes from './routes/public.js';
 import users from './routes/users.js';
 import assessments from './routes/assessments.js';
 import enrollments from './routes/enrollments.js';
+import stripeRoutes from './routes/stripe.js';
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
@@ -42,6 +43,8 @@ export function createApp() {
   app.use('/api/line', line);
   // parent portal is public, read-only, scoped by a per-student random token
   app.use('/api/public', publicRoutes);
+  // Stripe: webhook is public; create-checkout and portal use requireAuth inline
+  app.use('/api/stripe', stripeRoutes);
 
   // everything below requires a valid JWT and is automatically scoped to the
   // authenticated user's school (req.schoolId) — the multi-tenant boundary.

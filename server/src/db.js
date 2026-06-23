@@ -314,6 +314,13 @@ export function initSchema() {
   addCol('ALTER TABLE students ADD COLUMN recipient_type TEXT');
   // customizable homework-notification template. Placeholders: {ผู้รับ} {ชื่อ} {หัวข้อ} {รายละเอียด} {กำหนดส่ง}
   addCol('ALTER TABLE schools ADD COLUMN homework_message_template TEXT');
+  // subscription plan: trial | starter | pro | premium | cancelled
+  addCol("ALTER TABLE schools ADD COLUMN plan TEXT NOT NULL DEFAULT 'trial'");
+  // ISO datetime when current plan/trial expires; NULL means no expiry set yet
+  addCol('ALTER TABLE schools ADD COLUMN plan_expires TEXT');
+  // Stripe customer/subscription IDs (internal, never exposed to client)
+  addCol('ALTER TABLE schools ADD COLUMN stripe_customer_id TEXT');
+  addCol('ALTER TABLE schools ADD COLUMN stripe_subscription_id TEXT');
   // QR Code image (data URL) for the school's PromptPay / bank account — shown to
   // parents on the portal so they can scan-to-pay and then upload a slip.
   addCol('ALTER TABLE schools ADD COLUMN payment_qr_image TEXT');

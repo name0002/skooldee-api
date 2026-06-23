@@ -117,5 +117,11 @@
     acceptEnrollment:   function (id) { return req('/api/enrollments/' + id + '/accept', { method: 'POST' }); },
     rejectEnrollment:   function (id) { return req('/api/enrollments/' + id + '/reject', { method: 'POST' }); },
     deleteEnrollment:   function (id) { return req('/api/enrollments/' + id,             { method: 'DELETE' }); },
+
+    /* ---- Stripe billing ---- */
+    stripeCheckout: function (plan, cycle) {
+      return req('/api/stripe/create-checkout', { method: 'POST', body: JSON.stringify({ plan: plan, cycle: cycle }) });
+    },
+    stripePortal: function () { return req('/api/stripe/portal'); },
   };
 })();

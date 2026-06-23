@@ -991,6 +991,25 @@ function App({ liveLogout }){
   const [page, setPage] = useState(()=> localStorage.getItem("bm-page") || "dashboard");
   const [changingPw, setChangingPw] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
+  const [checkoutOk, setCheckoutOk] = useState(false);
+
+  React.useEffect(()=>{
+    const p = new URLSearchParams(window.location.search);
+    if(p.get('checkout') === 'success'){
+      setCheckoutOk(true);
+      history.replaceState({}, '', window.location.pathname);
+      setTimeout(()=>setCheckoutOk(false), 10000);
+    }
+  }, []);
+
+  const doUpgrade = async (plan, cycle)=>{
+    setUpgrading(true);
+    try{
+      const r = await window.API.stripeCheckout(plan||'pro', cycle||'mo');
+      window.location.href = r.url;
+    } catch(e){ alert(e.message||'เกิดข้อผิดพลาด กรุณาลองใหม่'); setUpgrading(false); }
+  };
 
   React.useEffect(()=>{
     const r = document.documentElement.style;
@@ -1047,6 +1066,31 @@ function App({ liveLogout }){
         ))}
 
         <div className="side-foot">
+          {(()=>{
+            const sch = DATA._schoolRaw || {};
+            const planType = sch.plan || 'trial';
+            const planExpires = sch.plan_expires;
+            const isPaid = ['starter','pro','premium'].includes(planType);
+            if(!DATA._isLiveMode || isPaid) return null;
+            const daysLeft = planExpires ? Math.max(0, Math.ceil((new Date(planExpires)-Date.now())/86400_000)) : null;
+            const expired = planType==='cancelled' || (daysLeft!==null && daysLeft<=0);
+            return (
+              <div style={{ marginBottom:10, padding:'12px 14px', borderRadius:'var(--radius)',
+                background: expired?'var(--danger-soft)':'var(--primary-soft)',
+                border:'1px solid '+(expired?'color-mix(in oklch,var(--danger) 25%,white)':'color-mix(in oklch,var(--primary) 20%,white)') }}>
+                <div style={{ fontSize:12.5, fontWeight:700, marginBottom:5,
+                  color: expired?'color-mix(in oklch,var(--danger) 80%,black)':'var(--primary-ink)' }}>
+                  {expired ? '❌ ทดลองใช้หมดอายุ' : daysLeft!==null ? `⏱ ทดลองใช้: เหลือ ${daysLeft} วัน` : '⏱ ทดลองใช้ฟรี'}
+                </div>
+                {!expired && daysLeft!==null && daysLeft<=3 &&
+                  <div style={{ fontSize:11.5, color:'var(--text-2)', marginBottom:8 }}>อัปเกรดเพื่อใช้งานต่อไม่ขาดตอน</div>}
+                <button disabled={upgrading} onClick={()=>doUpgrade('pro','mo')}
+                  className="btn btn-primary" style={{ width:'100%', fontSize:12.5, padding:'7px 10px' }}>
+                  {upgrading ? 'กำลังโหลด…' : 'อัปเกรด ฿1,290/เดือน'}
+                </button>
+              </div>
+            );
+          })()}
           <div className="side-card" style={{ marginBottom:10, background:"var(--danger-soft)", border:0 }}>
             <div style={{ fontSize:13, fontWeight:700, color:"color-mix(in oklch,var(--danger) 80%,black)" }}>⚠️ คอร์สใกล้หมด {nearN} คน</div>
             <div style={{ fontSize:12, color:"color-mix(in oklch,var(--danger) 65%,black)", margin:"3px 0 9px" }}>ควรติดต่อชวนต่อคอร์ส</div>
@@ -1094,6 +1138,13 @@ function App({ liveLogout }){
           </div>
         </header>
 
+        {checkoutOk && (
+          <div style={{ background:'#d1fae5', borderBottom:'1px solid #6ee7b7', padding:'11px 20px',
+            fontSize:14, fontWeight:600, color:'#065f46', display:'flex', alignItems:'center', gap:8 }}>
+            <span>✅</span> ชำระเงินสำเร็จ! แผนของคุณจะเปิดใช้งานภายในไม่กี่นาที
+            <button onClick={()=>setCheckoutOk(false)} style={{ marginLeft:'auto', background:'none', border:'none', cursor:'pointer', fontSize:16, color:'#065f46' }}>×</button>
+          </div>
+        )}
         <main className="content">
           {allowed
             ? <Screen go={go}/>

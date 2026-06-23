@@ -16,6 +16,9 @@ r.post('/register', wrap((req, res) => {
   const slug = String(school).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `school-${Date.now()}`;
   const sch = run('INSERT INTO schools (name, slug, category) VALUES (?, ?, ?)', school, slug, category || null);
   const schoolId = Number(sch.lastInsertRowid);
+  // start 14-day free trial
+  const trialEnd = new Date(Date.now() + 14 * 86400_000).toISOString();
+  run('UPDATE schools SET plan_expires = ? WHERE id = ?', trialEnd, schoolId);
   const u = run(
     'INSERT INTO users (school_id, email, password_hash, name, role) VALUES (?, ?, ?, ?, ?)',
     schoolId, email, hashPassword(password), name, 'owner'

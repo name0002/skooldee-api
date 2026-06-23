@@ -9,7 +9,7 @@ const parseRooms = (json) => { try { const a = JSON.parse(json || '[]'); return 
 
 // GET /api/schools — current school profile
 r.get('/', wrap((req, res) => {
-  const school = get('SELECT id, name, slug, category, near_limit_threshold, categories_json, line_token, line_secret, notify_prefs, name_display, hours_start, hours_end, contact_phone, line_oa_url, line_oa_basic_id, liff_id, rooms_json, assessment_criteria_json, show_assessments_to_parents, show_course_no_to_parents, invite_message_template, homework_message_template, payment_qr_image, logo_image, created_at FROM schools WHERE id = ?', req.schoolId);
+  const school = get('SELECT id, name, slug, category, near_limit_threshold, categories_json, line_token, line_secret, notify_prefs, name_display, hours_start, hours_end, contact_phone, line_oa_url, line_oa_basic_id, liff_id, rooms_json, assessment_criteria_json, show_assessments_to_parents, show_course_no_to_parents, invite_message_template, homework_message_template, payment_qr_image, logo_image, plan, plan_expires, created_at FROM schools WHERE id = ?', req.schoolId);
   if (!school) throw bad('school not found', 404);
   // never expose raw LINE credentials — only whether they are configured
   const { line_token, line_secret, notify_prefs, rooms_json, show_assessments_to_parents, show_course_no_to_parents, ...safe } = school;
@@ -109,7 +109,7 @@ r.patch('/', requireRole('owner', 'admin'), wrap((req, res) => {
   }
   if (!sets.length) throw bad('no fields to update');
   run(`UPDATE schools SET ${sets.join(', ')} WHERE id = ?`, ...vals, req.schoolId);
-  const s = get('SELECT id, name, slug, category, near_limit_threshold, categories_json, line_token, line_secret, notify_prefs, name_display, hours_start, hours_end, contact_phone, line_oa_url, liff_id, rooms_json, assessment_criteria_json, show_assessments_to_parents, show_course_no_to_parents, invite_message_template, homework_message_template, payment_qr_image, logo_image FROM schools WHERE id = ?', req.schoolId);
+  const s = get('SELECT id, name, slug, category, near_limit_threshold, categories_json, line_token, line_secret, notify_prefs, name_display, hours_start, hours_end, contact_phone, line_oa_url, liff_id, rooms_json, assessment_criteria_json, show_assessments_to_parents, show_course_no_to_parents, invite_message_template, homework_message_template, payment_qr_image, logo_image, plan, plan_expires FROM schools WHERE id = ?', req.schoolId);
   const { line_token: lt, line_secret: ls, notify_prefs: np, rooms_json: rj, show_assessments_to_parents: sap, show_course_no_to_parents: scp, ...safe } = s;
   let prefs = {};
   try { prefs = np ? JSON.parse(np) : {}; } catch { prefs = {}; }
