@@ -66,7 +66,8 @@ a{ color:inherit; text-decoration:none; }
 .nav.scrolled{ border-bottom-color:var(--border); background:oklch(0.985 0.006 70 / 0.94); }
 .nav-in{ display:flex; align-items:center; gap:14px; height:72px; }
 .logo{ display:flex; align-items:center; gap:11px; font-family:var(--ff-d); font-weight:800; font-size:21px; letter-spacing:-0.02em; }
-.logo-mark{ width:40px; height:40px; border-radius:11px; display:grid; place-items:center; overflow:hidden; }
+.logo-mark{ display:flex; align-items:center; }
+.logo-mark img{ width:46px; height:46px; display:block; }
 .hl-blue{ color:var(--terra-ink); }
 .nav-links{ display:flex; gap:6px; margin-left:18px; }
 .nav-links a{ padding:9px 15px; border-radius:10px; font-size:15px; font-weight:500; color:var(--ink-2); transition:.14s; }
@@ -228,7 +229,7 @@ footer{ padding:60px 0 40px; border-top:1px solid var(--border); margin-top:88px
   /* nav: stop the CTA buttons from pushing past the viewport on phones */
   .nav-in{ gap:8px; height:62px; }
   .logo{ font-size:18px; gap:8px; }
-  .logo-mark{ width:34px; height:34px; }
+  .logo-mark img{ width:38px; height:38px; }
   .nav-cta{ gap:7px; }
   .nav-cta .btn{ padding:8px 12px; font-size:13.5px; border-radius:9px; }
   .nav-hide-sm{ display:none; }   /* "ดูตัวอย่างระบบ" — still reachable from the hero CTA */
