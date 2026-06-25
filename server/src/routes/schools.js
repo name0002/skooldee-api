@@ -9,13 +9,23 @@ const parseRooms = (json) => { try { const a = JSON.parse(json || '[]'); return 
 
 // GET /api/schools — current school profile
 r.get('/', wrap((req, res) => {
-  const school = get('SELECT id, name, slug, category, near_limit_threshold, categories_json, line_token, line_secret, notify_prefs, name_display, hours_start, hours_end, contact_phone, line_oa_url, line_oa_basic_id, liff_id, rooms_json, assessment_criteria_json, show_assessments_to_parents, show_course_no_to_parents, invite_message_template, homework_message_template, payment_qr_image, logo_image, plan, plan_expires, created_at FROM schools WHERE id = ?', req.schoolId);
+  const school = get('SELECT id, name, slug, category, near_limit_threshold, categories_json, line_token, line_secret, notify_prefs, name_display, hours_start, hours_end, contact_phone, line_oa_url, line_oa_basic_id, liff_id, rooms_json, assessment_criteria_json, show_assessments_to_parents, show_course_no_to_parents, invite_message_template, homework_message_template, line_welcome_enabled, line_welcome_message, payment_qr_image, logo_image, plan, plan_expires, created_at FROM schools WHERE id = ?', req.schoolId);
   if (!school) throw bad('school not found', 404);
   // never expose raw LINE credentials — only whether they are configured
   const { line_token, line_secret, notify_prefs, rooms_json, show_assessments_to_parents, show_course_no_to_parents, ...safe } = school;
   let prefs = {};
   try { prefs = notify_prefs ? JSON.parse(notify_prefs) : {}; } catch { prefs = {}; }
-  res.json({ ...safe, rooms: parseRooms(rooms_json), line_configured: !!line_token, line_secret_configured: !!line_secret, notify_prefs: prefs, show_assessments_to_parents: !!show_assessments_to_parents, show_course_no_to_parents: !!show_course_no_to_parents });
+
+  // Calculate days remaining until plan expires
+  let days_remaining = null;
+  if (school.plan_expires) {
+    const expires = new Date(school.plan_expires);
+    const now = new Date();
+    const diff = expires.getTime() - now.getTime();
+    days_remaining = Math.ceil(diff / (1000 * 60 * 60 * 24));
+  }
+
+  res.json({ ...safe, rooms: parseRooms(rooms_json), line_configured: !!line_token, line_secret_configured: !!line_secret, notify_prefs: prefs, show_assessments_to_parents: !!show_assessments_to_parents, show_course_no_to_parents: !!show_course_no_to_parents, days_remaining });
 }));
 
 // PATCH /api/schools — update school profile (owner/admin only)
@@ -97,6 +107,13 @@ r.patch('/', requireRole('owner', 'admin'), wrap((req, res) => {
     const t = String(req.body.homework_message_template || '').slice(0, 1000).trim();
     sets.push('homework_message_template = ?'); vals.push(t || null);
   }
+  if (req.body.line_welcome_enabled !== undefined) {
+    sets.push('line_welcome_enabled = ?'); vals.push(req.body.line_welcome_enabled ? 1 : 0);
+  }
+  if (req.body.line_welcome_message !== undefined) {
+    const t = String(req.body.line_welcome_message || '').slice(0, 1000).trim();
+    sets.push('line_welcome_message = ?'); vals.push(t || null);
+  }
   if (req.body.payment_qr_image !== undefined) {
     const img = req.body.payment_qr_image ? String(req.body.payment_qr_image) : null;
     if (img && img.length > 3_000_000) throw bad('รูป QR ใหญ่เกินไป (สูงสุด 3 MB)');
@@ -109,7 +126,7 @@ r.patch('/', requireRole('owner', 'admin'), wrap((req, res) => {
   }
   if (!sets.length) throw bad('no fields to update');
   run(`UPDATE schools SET ${sets.join(', ')} WHERE id = ?`, ...vals, req.schoolId);
-  const s = get('SELECT id, name, slug, category, near_limit_threshold, categories_json, line_token, line_secret, notify_prefs, name_display, hours_start, hours_end, contact_phone, line_oa_url, liff_id, rooms_json, assessment_criteria_json, show_assessments_to_parents, show_course_no_to_parents, invite_message_template, homework_message_template, payment_qr_image, logo_image, plan, plan_expires FROM schools WHERE id = ?', req.schoolId);
+  const s = get('SELECT id, name, slug, category, near_limit_threshold, categories_json, line_token, line_secret, notify_prefs, name_display, hours_start, hours_end, contact_phone, line_oa_url, liff_id, rooms_json, assessment_criteria_json, show_assessments_to_parents, show_course_no_to_parents, invite_message_template, homework_message_template, line_welcome_enabled, line_welcome_message, payment_qr_image, logo_image, plan, plan_expires FROM schools WHERE id = ?', req.schoolId);
   const { line_token: lt, line_secret: ls, notify_prefs: np, rooms_json: rj, show_assessments_to_parents: sap, show_course_no_to_parents: scp, ...safe } = s;
   let prefs = {};
   try { prefs = np ? JSON.parse(np) : {}; } catch { prefs = {}; }
