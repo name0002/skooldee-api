@@ -155,6 +155,32 @@ function Dashboard({ go }){
         </div>
       )}
 
+      {DATA._isLiveMode && DATA._schoolRaw && DATA._schoolRaw.days_remaining !== null && (()=>{
+        const days = DATA._schoolRaw.days_remaining;
+        const isExpired = days <= 0;
+        const isWarning = days < 3;
+        const bgColor = isExpired ? "#fef2f2" : isWarning ? "#fef3c7" : "#f0fdf4";
+        const borderColor = isExpired ? "#fca5a5" : isWarning ? "#fcd34d" : "#86efac";
+        const textColor = isExpired ? "#7f1d1d" : isWarning ? "#92400e" : "#15803d";
+        const icon = isExpired ? "⛔" : isWarning ? "⏰" : "✅";
+        const message = isExpired ? "หมดอายุ! กรุณาต่ออายุแผน" : isWarning ? `เหลือ ${days} วัน` : `เหลือ ${days} วัน`;
+
+        return (
+          <div style={{ display:"flex", alignItems:"center", gap:13, padding:"13px 16px", borderRadius:14,
+            background:bgColor, border:`1.5px solid ${borderColor}`, marginBottom:18 }}>
+            <div style={{ fontSize:22 }}>{icon}</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:700, color:textColor, fontSize:14.5 }}>
+                {isExpired ? "แผนทดลองหมดอายุแล้ว" : `เหลือ ${days} วัน ${days===1?"":""}ของแผนทดลองใช้`}
+              </div>
+              <div style={{ fontSize:13, color:textColor, marginTop:1, opacity:0.8 }}>
+                {isExpired ? "กรุณาต่ออายุแผน เพื่อให้โรงเรียนของคุณสามารถใช้งานได้ต่อไป" : "กรุณาต่ออายุแผนเมื่อแผนปัจจุบันหมดอายุ"}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {nearList.length>0 && (
         <div onClick={()=>go("students")} style={{ display:"flex", alignItems:"center", gap:13, padding:"13px 16px", borderRadius:14,
           background:"var(--danger-soft)", border:"1px solid color-mix(in oklch,var(--danger) 22%,var(--border))", marginBottom:18, cursor:"pointer" }}>
@@ -312,6 +338,7 @@ function Schedule(){
   const [toast, showToast] = useToast();
   const [weekOffset, setWeekOffset] = useState(0); // 0=this week, -1=last, +1=next
   const [makeupOpen, setMakeupOpen] = useState(false);
+  const [sessionsOpen, setSessionsOpen] = useState(false); // self-service booking manager
   const [viewMode, setViewMode] = useState("day"); // "day" = columns are weekdays · "room" = columns are rooms
   const [roomDay, setRoomDay] = useState(()=> typeof DATA._todayDow==='number' ? DATA._todayDow : (new Date().getDay()+6)%7);
 
@@ -465,6 +492,7 @@ function Schedule(){
             <button className={"btn btn-sm"+(viewMode==="room"?" btn-primary":" btn-ghost")} style={{ height:32, padding:"0 12px" }} onClick={()=>setViewMode("room")} title="ดูตารางตามห้องเรียน">🚪 <span className="hide-mobile">ตามห้อง</span></button>
           </div>
           <button className="btn btn-ghost" onClick={()=>setMakeupOpen(true)} title="เพิ่มคาบเรียนชดเชยครั้งเดียว"><Icon n="plus" size={16}/> ชดเชย</button>
+          {DATA._isLiveMode && <button className="btn btn-ghost" onClick={()=>setSessionsOpen(true)} title="เปิดคลาสให้ผู้ปกครอง/นักเรียนจองออนไลน์เอง">📅 <span className="hide-mobile">จองออนไลน์</span></button>}
           <button className="btn btn-primary" onClick={()=>setBooking({})}><Icon n="plus" size={18}/> จองคาบเรียน</button>
         </div>
       </div>
@@ -623,6 +651,7 @@ function Schedule(){
       }}/>}
       {booking && <BookingDrawer slot={booking} onClose={()=>setBooking(null)} onSave={()=>{ setBooking(null); showToast("จองคาบเรียนสำเร็จ"); }}/>}
       {makeupOpen && <MakeupDrawer onClose={()=>setMakeupOpen(false)} onSave={()=>{ setMakeupOpen(false); showToast("เพิ่มคาบชดเชยแล้ว ✓"); }}/>}
+      {sessionsOpen && <BookableSessionsManager onClose={()=>setSessionsOpen(false)} showToast={showToast}/>}
       {moveAsk && (
         <Drawer title="ย้ายคาบเรียน"
           sub={`${DATA.DAYS[moveAsk.originDay].d} ${moveAsk.ev.start} → ${DATA.DAYS[moveAsk.toDay].d} ${fmtMin(moveAsk.toStartMin)}–${fmtMin(moveAsk.toEndMin)} น.`}
@@ -862,6 +891,243 @@ function MakeupDrawer({ onClose, onSave }){
   );
 }
 
+/* ---- Self-service booking manager: publish bookable sessions + see who booked ---- */
+const KIND_META = {
+  group:   { label:'คลาสกลุ่ม',     icon:'👥', defaultOpen:'existing', defaultCap:6 },
+  private: { label:'เรียนตัวต่อตัว', icon:'🎯', defaultOpen:'existing', defaultCap:1 },
+  makeup:  { label:'เรียนชดเชย',     icon:'🔁', defaultOpen:'existing', defaultCap:1 },
+  trial:   { label:'ทดลองเรียน',     icon:'✨', defaultOpen:'public',   defaultCap:1 },
+};
+const OPEN_LABEL = { existing:'นักเรียนปัจจุบัน', public:'คนนอก (สมัครใหม่)', both:'ทุกคน' };
+
+function BookableSessionsManager({ onClose, showToast }){
+  const [tab,setTab]         = useState('list');
+  const [sessions,setSessions] = useState(null); // null = loading
+  const [err,setErr]         = useState(null);
+  const [expand,setExpand]   = useState(null);   // session id whose bookings are open
+  const [bookings,setBookings] = useState([]);   // bookings of the expanded session
+  const [bkLoading,setBkLoading] = useState(false);
+
+  const slug = (DATA._schoolRaw && DATA._schoolRaw.slug) || '';
+  const pubLink = slug ? (location.origin + '/book.html?school=' + encodeURIComponent(slug)) : '';
+
+  const load = async()=>{
+    try{ const rows = await window.API.bookableSessions(); setSessions(rows||[]); }
+    catch(e){ setErr(e.message||'โหลดไม่สำเร็จ'); setSessions([]); }
+  };
+  useEffect(()=>{ load(); },[]);
+
+  const openBookings = async(id)=>{
+    if(expand===id){ setExpand(null); return; }
+    setExpand(id); setBkLoading(true); setBookings([]);
+    try{ const rows = await window.API.sessionBookings(id); setBookings(rows||[]); }
+    catch(e){ showToast('โหลดรายชื่อไม่สำเร็จ'); }
+    setBkLoading(false);
+  };
+  const setBkStatus = async(bid, status)=>{
+    try{ await window.API.patchBooking(bid, { status }); setBookings(bs=>bs.map(b=>b.id===bid?{...b,status}:b)); }
+    catch(e){ showToast('อัปเดตไม่สำเร็จ'); }
+  };
+  const toggleStatus = async(s)=>{
+    const next = s.status==='open' ? 'closed' : 'open';
+    try{ await window.API.patchSession(s.id, { status:next }); load(); }
+    catch(e){ showToast('อัปเดตไม่สำเร็จ'); }
+  };
+  const del = async(s)=>{
+    if(!confirm('ลบคลาสนี้? การจองทั้งหมดจะถูกลบด้วย')) return;
+    try{ await window.API.deleteSession(s.id); load(); showToast('ลบแล้ว'); }
+    catch(e){ showToast('ลบไม่สำเร็จ'); }
+  };
+  const copyLink = ()=>{
+    if(!pubLink){ showToast('ยังไม่ได้ตั้ง slug ของโรงเรียน'); return; }
+    try{ navigator.clipboard.writeText(pubLink); showToast('คัดลอกลิงก์แล้ว ✓'); }
+    catch(e){ showToast(pubLink); }
+  };
+
+  const fmtDate = (iso)=>{ const M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    const p=String(iso||'').split('-'); return p.length===3 ? (parseInt(p[2])+' '+M[parseInt(p[1])-1]) : iso; };
+
+  return (
+    <Drawer title="จองออนไลน์ (Self-service)" sub="เปิดคลาสให้ผู้ปกครอง/นักเรียนจองเอง" onClose={onClose} accent="var(--primary)"
+      footer={tab==='list'
+        ? <button className="btn btn-primary" style={{flex:1}} onClick={()=>{ setErr(null); setTab('create'); }}><Icon n="plus" size={16}/> เปิดคลาสใหม่ให้จอง</button>
+        : <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setTab('list')}>← กลับไปรายการ</button>}>
+
+      {pubLink && (
+        <div style={{ background:'var(--surface-2)', borderRadius:10, padding:'11px 13px', marginBottom:14, fontSize:12.5 }}>
+          <div style={{ color:'var(--text-3)', marginBottom:5 }}>🔗 ลิงก์จองสำหรับคนนอก (แชร์ได้เลย)</div>
+          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+            <code style={{ flex:1, fontSize:11.5, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pubLink}</code>
+            <button className="btn btn-ghost btn-sm" onClick={copyLink}>คัดลอก</button>
+          </div>
+          <div style={{ color:'var(--text-3)', marginTop:6, fontSize:11.5 }}>นักเรียนปัจจุบันจองผ่านลิงก์ส่วนตัวในหน้า "ผู้ปกครอง" ได้เลย</div>
+        </div>
+      )}
+
+      {err && <div style={{background:'var(--danger-soft)',color:'var(--danger)',borderRadius:8,padding:'9px 13px',fontSize:13,marginBottom:12}}>{err}</div>}
+
+      {tab==='create'
+        ? <SessionCreateForm onCreated={()=>{ setTab('list'); load(); showToast('เปิดคลาสให้จองแล้ว ✓'); }} onErr={setErr}/>
+        : sessions===null
+          ? <div style={{ textAlign:'center', color:'var(--text-3)', padding:30 }}>กำลังโหลด…</div>
+          : !sessions.length
+            ? <div style={{ textAlign:'center', color:'var(--text-3)', padding:'30px 10px' }}>
+                <div style={{ fontSize:40, marginBottom:8 }}>📅</div>ยังไม่มีคลาสที่เปิดให้จอง<br/>กด "เปิดคลาสใหม่ให้จอง" เพื่อเริ่ม
+              </div>
+            : <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {sessions.map(s=>{
+                  const km = KIND_META[s.kind]||{ label:s.kind, icon:'📘' };
+                  const closed = s.status!=='open';
+                  return (
+                    <div key={s.id} style={{ border:'1px solid var(--border)', borderRadius:12, padding:'12px 13px', opacity:closed?0.6:1 }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
+                        <div>
+                          <div style={{ fontSize:11.5, color:'var(--text-3)', marginBottom:2 }}>{km.icon} {km.label} · {OPEN_LABEL[s.open_to]||s.open_to}</div>
+                          <div style={{ fontWeight:600, fontSize:14.5 }}>{s.title||km.label}{s.category?' · '+((DATA.CATS[s.category]||{}).label||s.category):''}</div>
+                          <div style={{ fontSize:12.5, color:'var(--text-2)', marginTop:3 }}>
+                            📅 {fmtDate(s.date)} · 🕐 {s.start}–{s.end} น.{s.teacher_name?' · 👩‍🏫 '+s.teacher_name:''}{s.fee!=null?' · 💰 '+Number(s.fee).toLocaleString()+'฿':''}
+                          </div>
+                        </div>
+                        <div style={{ textAlign:'right', whiteSpace:'nowrap' }}>
+                          <div style={{ fontWeight:700, fontSize:15, color:s.seats_left<=0?'var(--danger)':'var(--primary)' }}>{s.booked}/{s.capacity}</div>
+                          <div style={{ fontSize:11, color:'var(--text-3)' }}>จองแล้ว</div>
+                        </div>
+                      </div>
+                      <div style={{ display:'flex', gap:6, marginTop:10, flexWrap:'wrap' }}>
+                        <button className="btn btn-ghost btn-sm" onClick={()=>openBookings(s.id)}>{expand===s.id?'ซ่อนรายชื่อ':'ดูรายชื่อ ('+s.booked+')'}</button>
+                        <button className="btn btn-ghost btn-sm" onClick={()=>toggleStatus(s)}>{closed?'เปิดรับจอง':'ปิดรับจอง'}</button>
+                        <button className="btn btn-ghost btn-sm" style={{ color:'var(--danger)' }} onClick={()=>del(s)}>ลบ</button>
+                      </div>
+                      {expand===s.id && (
+                        <div style={{ marginTop:10, borderTop:'1px dashed var(--border)', paddingTop:10 }}>
+                          {bkLoading ? <div style={{ color:'var(--text-3)', fontSize:13 }}>กำลังโหลด…</div>
+                            : !bookings.length ? <div style={{ color:'var(--text-3)', fontSize:13 }}>ยังไม่มีคนจอง</div>
+                            : bookings.map(b=>(
+                                <div key={b.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, padding:'6px 0', fontSize:13 }}>
+                                  <div>
+                                    <span style={{ fontWeight:600 }}>{b.name}</span>{b.nickname?' ('+b.nickname+')':''}
+                                    {b.is_prospect && <span style={{ fontSize:11, color:'var(--warning)', marginLeft:5 }}>สมัครใหม่</span>}
+                                    {b.phone && <div style={{ fontSize:11.5, color:'var(--text-3)' }}>📞 {b.phone}{b.line?' · '+b.line:''}</div>}
+                                    {b.status!=='booked' && <span style={{ fontSize:11, color:'var(--text-3)', marginLeft:2 }}>· {({cancelled:'ยกเลิก',attended:'มาเรียน',no_show:'ไม่มา'})[b.status]||b.status}</span>}
+                                  </div>
+                                  <div style={{ display:'flex', gap:4 }}>
+                                    <button className="btn btn-ghost btn-sm" title="มาเรียน" onClick={()=>setBkStatus(b.id,'attended')}>✓</button>
+                                    <button className="btn btn-ghost btn-sm" title="ไม่มา" onClick={()=>setBkStatus(b.id,'no_show')}>✕</button>
+                                    <button className="btn btn-ghost btn-sm" title="ยกเลิก" onClick={()=>setBkStatus(b.id,'cancelled')}>🗑</button>
+                                  </div>
+                                </div>
+                              ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>}
+    </Drawer>
+  );
+}
+
+function SessionCreateForm({ onCreated, onErr }){
+  const _today = new Date().toISOString().slice(0,10);
+  const [kind,setKind]       = useState('group');
+  const [title,setTitle]     = useState('');
+  const [cat,setCat]         = useState(Object.values(DATA.CATS)[0]?.key||'');
+  const [teacherNick,setTeacher] = useState('');
+  const [date,setDate]       = useState(_today);
+  const [startTime,setStart] = useState('15:00');
+  const [dur,setDur]         = useState('60');
+  const [capacity,setCap]    = useState(String(KIND_META.group.defaultCap));
+  const [fee,setFee]         = useState('');
+  const [openTo,setOpenTo]   = useState('existing');
+  const [busy,setBusy]       = useState(false);
+
+  const pickKind = (k)=>{ setKind(k); setCap(String(KIND_META[k].defaultCap)); setOpenTo(KIND_META[k].defaultOpen); };
+  const catTeachers = DATA.TEACHERS.filter(t=>!cat||t.cats.includes(cat));
+
+  const save = async()=>{
+    if(!date){ onErr('กรุณาเลือกวันที่'); return; }
+    setBusy(true); onErr(null);
+    const [h,m] = startTime.split(':').map(Number);
+    const start_min = h*60+(m||0);
+    const tc = DATA.TEACHERS.find(t=>t.nick===teacherNick);
+    try{
+      await window.API.createSession({
+        kind, title:title.trim()||null, category:cat||null,
+        teacher_id: tc ? (tc._dbId??tc.id??null) : null,
+        date, start_min, end_min:start_min+Number(dur),
+        capacity:Number(capacity)||1, fee: fee!==''?Number(fee):null, open_to:openTo,
+      });
+      onCreated();
+    }catch(e){ onErr(e.message||'บันทึกไม่สำเร็จ'); setBusy(false); }
+  };
+
+  return (
+    <div>
+      <div className="field"><label>ประเภทการจอง</label>
+        <div className="tag-filter">
+          {Object.keys(KIND_META).map(k=>(
+            <button key={k} className={"chip"+(kind===k?" active":"")} onClick={()=>pickKind(k)}>{KIND_META[k].icon} {KIND_META[k].label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="field"><label>ชื่อคลาส (ไม่บังคับ)</label>
+        <input type="text" value={title} placeholder={KIND_META[kind].label} maxLength={80} onChange={e=>setTitle(e.target.value)}/>
+      </div>
+      <div className="field"><label>วิชา</label>
+        <div className="tag-filter">
+          {Object.values(DATA.CATS).map(c=>(
+            <button key={c.key} className={"chip"+(cat===c.key?" active":"")} onClick={()=>{setCat(c.key);setTeacher('');}}>
+              <span className="dotmark" style={{background:c.color}}></span>{c.icon} {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="field"><label>ครูผู้สอน (ไม่บังคับ)</label>
+        <select value={teacherNick} onChange={e=>setTeacher(e.target.value)}>
+          <option value="">— ไม่ระบุ —</option>
+          {catTeachers.map(t=><option key={t.id} value={t.nick}>{t.nick}</option>)}
+        </select>
+      </div>
+      <div style={{display:"flex",gap:12}}>
+        <div className="field" style={{flex:1}}><label>วันที่</label>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)}/>
+        </div>
+        <div className="field" style={{flex:1}}><label>เวลาเริ่ม</label>
+          <select value={startTime} onChange={e=>setStart(e.target.value)}>
+            {DATA.SLOT_TIMES.map((t,i)=><option key={i} value={t}>{t} น.</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:12}}>
+        <div className="field" style={{flex:1}}><label>ระยะเวลา</label>
+          <select value={dur} onChange={e=>setDur(e.target.value)}>
+            <option value="30">30 นาที</option><option value="60">1 ชั่วโมง</option>
+            <option value="90">1.5 ชั่วโมง</option><option value="120">2 ชั่วโมง</option>
+          </select>
+        </div>
+        <div className="field" style={{flex:1}}><label>รับได้ (ที่นั่ง)</label>
+          <input type="number" min="1" value={capacity} onChange={e=>setCap(e.target.value)}/>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:12}}>
+        <div className="field" style={{flex:1}}><label>ค่าเรียน (บาท, ไม่บังคับ)</label>
+          <input type="number" min="0" value={fee} placeholder="เช่น 300" onChange={e=>setFee(e.target.value)}/>
+        </div>
+        <div className="field" style={{flex:1}}><label>ใครจองได้</label>
+          <select value={openTo} onChange={e=>setOpenTo(e.target.value)}>
+            <option value="existing">นักเรียนปัจจุบัน</option>
+            <option value="public">คนนอก (สมัครใหม่)</option>
+            <option value="both">ทุกคน</option>
+          </select>
+        </div>
+      </div>
+      <button className="btn btn-primary" style={{width:'100%',marginTop:6}} onClick={save} disabled={busy||!date}>
+        {busy?'กำลังบันทึก…':<><Icon n="check" size={16}/> เปิดให้จอง</>}
+      </button>
+    </div>
+  );
+}
+
 function BookingDrawer({ slot, onClose, onSave }){
   const [cat,setCat]             = useState("piano");
   const [group,setGroup]         = useState(false);
@@ -1087,3 +1353,214 @@ function BookingDrawer({ slot, onClose, onSave }){
 window.Schedule = Schedule;
 
 Object.assign(window, { Dashboard, Schedule, Stat });
+
+/* ===================== SUPER ADMIN DASHBOARD ===================== */
+function SuperAdmin(){
+  const [rows, setRows]   = React.useState(null);   // null = loading
+  const [filter, setFilter] = React.useState('all'); // all | trial | active | expired
+  const [detail, setDetail] = React.useState(null);  // school id expanded
+
+  React.useEffect(()=>{
+    window.API.adminSchools()
+      .then(d=>setRows(Array.isArray(d)?d:[]))
+      .catch(e=>setRows({ _error: e.message||'โหลดไม่สำเร็จ' }));
+  },[]);
+
+  if(rows===null) return (
+    <div style={{ textAlign:'center', padding:'60px 20px', color:'var(--text-3)', fontSize:14 }}>กำลังโหลด…</div>
+  );
+  if(rows && rows._error) return (
+    <div style={{ textAlign:'center', padding:'60px 20px', color:'var(--danger)', fontSize:14 }}>
+      {rows._error==='platform admin only' ? '🔒 สิทธิ์ Platform Admin เท่านั้น' : '⚠ '+rows._error}
+    </div>
+  );
+
+  const now = new Date();
+  const fmt = (n)=> n>=10000 ? (n/1000).toFixed(0)+'K' : n.toLocaleString();
+  const planBadge = (s)=>{
+    const MAP = {
+      trial:    { bg:'#EFF6FF', c:'#1D4ED8', t:'Trial' },
+      studio:   { bg:'#F5F3FF', c:'#6D28D9', t:'Studio' },
+      academy:  { bg:'#ECFDF5', c:'#065F46', t:'Academy' },
+      enterprise:{ bg:'#FFF7ED', c:'#92400E', t:'Enterprise' },
+      cancelled:{ bg:'#FEF2F2', c:'#991B1B', t:'Cancelled' },
+    };
+    const m = MAP[s.plan] || MAP.cancelled;
+    return <span style={{ fontSize:11, fontWeight:700, borderRadius:6, padding:'2px 8px', background:m.bg, color:m.c }}>{m.t}</span>;
+  };
+  const statusBadge = (s)=>{
+    const MAP = {
+      trial:   { c:'#1D4ED8', t:'Trial' },
+      active:  { c:'#065F46', t:'Active' },
+      expired: { c:'#991B1B', t:'Expired' },
+    };
+    const m = MAP[s.plan_status]||MAP.expired;
+    return <span style={{ fontSize:11, fontWeight:600, color:m.c }}>● {m.t}</span>;
+  };
+  const daysLeft = (iso)=>{
+    if(!iso) return null;
+    const d = Math.ceil((new Date(iso)-now)/86400_000);
+    return d<=0 ? 'หมดแล้ว' : `${d} วัน`;
+  };
+
+  const filtered = rows.filter(s=>{
+    if(filter==='all') return true;
+    return s.plan_status===filter;
+  });
+
+  const totalRev   = rows.reduce((a,s)=>a+s.revenue_this_month,0);
+  const counts     = { all:rows.length, trial:0, active:0, expired:0 };
+  rows.forEach(s=>{ counts[s.plan_status]=(counts[s.plan_status]||0)+1; });
+
+  const tabBtn = (id, label)=>(
+    <button onClick={()=>setFilter(id)}
+      style={{ padding:'7px 16px', borderRadius:8, border:'none', cursor:'pointer',
+        fontWeight:600, fontSize:13,
+        background: filter===id?'var(--primary)':'var(--surface)',
+        color: filter===id?'#fff':'var(--text-2)',
+        transition:'background .15s',
+      }}>
+      {label} <span style={{ fontSize:11, opacity:.7 }}>{counts[id]}</span>
+    </button>
+  );
+
+  const statCard = (label, value, color)=>(
+    <div style={{ flex:1, minWidth:120, background:'var(--surface)', border:'1px solid var(--border)',
+      borderRadius:'var(--radius-lg)', padding:'14px 18px' }}>
+      <div style={{ fontSize:11.5, color:'var(--text-3)', marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:22, fontWeight:700, color:color||'var(--text)' }}>{value}</div>
+    </div>
+  );
+
+  return (
+    <div style={{ maxWidth:1100, margin:'0 auto', padding:'4px 0 48px' }}>
+      {/* Summary stats */}
+      <div style={{ display:'flex', gap:12, marginBottom:24, flexWrap:'wrap' }}>
+        {statCard('โรงเรียนทั้งหมด', rows.length)}
+        {statCard('กำลัง Trial', counts.trial, '#1D4ED8')}
+        {statCard('Paid Active', counts.active, '#065F46')}
+        {statCard('หมดอายุ', counts.expired, 'var(--danger)')}
+        {statCard('รายได้เดือนนี้', '฿'+fmt(totalRev), 'var(--primary-ink)')}
+      </div>
+
+      {/* Filter tabs */}
+      <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
+        {tabBtn('all','ทั้งหมด')}
+        {tabBtn('trial','Trial')}
+        {tabBtn('active','Active')}
+        {tabBtn('expired','หมดอายุ')}
+      </div>
+
+      {/* Table */}
+      <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', overflow:'hidden' }}>
+        {/* header */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 180px 120px 90px 70px 70px 90px',
+          gap:0, padding:'10px 16px', background:'var(--surface-2)',
+          borderBottom:'1px solid var(--border)', fontSize:11.5, fontWeight:700, color:'var(--text-3)',
+          textTransform:'uppercase', letterSpacing:'.04em' }}>
+          <span>โรงเรียน / เจ้าของ</span>
+          <span>อีเมล</span>
+          <span>แพลน</span>
+          <span>นักเรียน</span>
+          <span>ครู</span>
+          <span>รายได้/เดือน</span>
+          <span>สมัคร</span>
+        </div>
+
+        {filtered.length===0 && (
+          <div style={{ textAlign:'center', padding:'36px', color:'var(--text-3)', fontSize:13 }}>ไม่มีข้อมูล</div>
+        )}
+
+        {filtered.map((s,i)=>{
+          const open = detail===s.id;
+          const expiry = s.plan_status==='trial' ? s.trial_ends_at : s.subscription_expires_at;
+          return (
+            <React.Fragment key={s.id}>
+              <div onClick={()=>setDetail(open?null:s.id)}
+                style={{ display:'grid', gridTemplateColumns:'1fr 180px 120px 90px 70px 70px 90px',
+                  gap:0, padding:'12px 16px', cursor:'pointer',
+                  borderBottom:'1px solid var(--border)',
+                  background: open?'var(--primary-soft)':'',
+                  transition:'background .12s',
+                }}
+                onMouseEnter={e=>{ if(!open) e.currentTarget.style.background='var(--surface-2)'; }}
+                onMouseLeave={e=>{ if(!open) e.currentTarget.style.background=''; }}>
+                {/* name + status */}
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontWeight:600, fontSize:14, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                    {s.name}
+                  </div>
+                  <div style={{ fontSize:12, color:'var(--text-3)', marginTop:2 }}>
+                    {statusBadge(s)}{' · '}{s.owner_name||'—'}
+                  </div>
+                </div>
+                {/* email */}
+                <div style={{ fontSize:12, color:'var(--text-2)', alignSelf:'center',
+                  whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                  {s.owner_email||'—'}
+                </div>
+                {/* plan */}
+                <div style={{ alignSelf:'center' }}>{planBadge(s)}</div>
+                {/* students */}
+                <div style={{ fontWeight:700, fontSize:14, alignSelf:'center' }}>{s.student_count}</div>
+                {/* teachers */}
+                <div style={{ fontWeight:700, fontSize:14, alignSelf:'center' }}>{s.active_teachers}</div>
+                {/* revenue */}
+                <div style={{ fontWeight:700, fontSize:13, alignSelf:'center', color:'var(--primary-ink)' }}>
+                  {s.revenue_this_month>0?'฿'+fmt(s.revenue_this_month):'—'}
+                </div>
+                {/* joined */}
+                <div style={{ fontSize:12, color:'var(--text-3)', alignSelf:'center' }}>
+                  {(s.created_at||'').slice(0,10)}
+                </div>
+              </div>
+
+              {/* Expanded detail row */}
+              {open && (
+                <div style={{ background:'var(--primary-soft)', padding:'14px 20px 18px',
+                  borderBottom:'1px solid var(--border)', display:'flex', gap:32, flexWrap:'wrap' }}>
+                  <div>
+                    <div style={{ fontSize:11.5, color:'var(--text-3)', marginBottom:3 }}>ID</div>
+                    <div style={{ fontWeight:600, fontSize:13 }}>{s.id}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11.5, color:'var(--text-3)', marginBottom:3 }}>Slug</div>
+                    <div style={{ fontWeight:600, fontSize:13 }}>{s.slug||'—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11.5, color:'var(--text-3)', marginBottom:3 }}>แพลน</div>
+                    <div style={{ fontWeight:600, fontSize:13 }}>{s.plan_label} ({s.plan})</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11.5, color:'var(--text-3)', marginBottom:3 }}>
+                      {s.plan_status==='trial' ? 'Trial หมดอายุ' : 'Subscription หมดอายุ'}
+                    </div>
+                    <div style={{ fontWeight:600, fontSize:13 }}>
+                      {expiry ? `${expiry.slice(0,10)} (${daysLeft(expiry)})` : '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11.5, color:'var(--text-3)', marginBottom:3 }}>ใบเสร็จทั้งหมด</div>
+                    <div style={{ fontWeight:600, fontSize:13 }}>{s.invoice_count} ใบ</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11.5, color:'var(--text-3)', marginBottom:3 }}>เจ้าของ</div>
+                    <div style={{ fontWeight:600, fontSize:13 }}>{s.owner_name||'—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11.5, color:'var(--text-3)', marginBottom:3 }}>อีเมล</div>
+                    <a href={'mailto:'+s.owner_email}
+                      style={{ fontWeight:600, fontSize:13, color:'var(--primary)' }}
+                      onClick={e=>e.stopPropagation()}>
+                      {s.owner_email||'—'}
+                    </a>
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

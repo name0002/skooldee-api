@@ -250,6 +250,48 @@ CREATE TABLE IF NOT EXISTS class_confirmations (
   UNIQUE(student_id, date)
 );
 CREATE INDEX IF NOT EXISTS idx_confirm_school_date ON class_confirmations(school_id, date);
+
+-- Self-service booking: a school publishes date-specific sessions that parents/prospects
+-- book a seat in (through a public link). One unified table covers every booking model via kind:
+--   group   → an open group class (capacity > 1), bookable by existing students
+--   private → a 1-on-1 slot from a teacher's availability (capacity 1)
+--   makeup  → a make-up class for a missed session (also mirrored into schedule_exceptions)
+--   trial   → an intro/trial class open to NEW prospects (no student record yet)
+CREATE TABLE IF NOT EXISTS bookable_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+  teacher_id INTEGER REFERENCES teachers(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL DEFAULT 'group',           -- group | private | makeup | trial
+  title TEXT,
+  category TEXT,
+  date TEXT NOT NULL,                            -- YYYY-MM-DD (a specific calendar date)
+  start_min INTEGER NOT NULL,                    -- minutes from 00:00
+  end_min INTEGER NOT NULL,
+  capacity INTEGER NOT NULL DEFAULT 1,
+  room TEXT,
+  fee INTEGER,                                  -- optional price shown to the booker (THB)
+  open_to TEXT NOT NULL DEFAULT 'existing',      -- existing | public | both
+  status TEXT NOT NULL DEFAULT 'open',           -- open | closed | cancelled
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_bookable_school_date ON bookable_sessions(school_id, date);
+
+CREATE TABLE IF NOT EXISTS bookings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+  session_id INTEGER NOT NULL REFERENCES bookable_sessions(id) ON DELETE CASCADE,
+  student_id INTEGER REFERENCES students(id) ON DELETE CASCADE,  -- null for public/new prospects
+  booker_name TEXT,                             -- filled when there's no student_id yet
+  booker_phone TEXT,
+  booker_line TEXT,
+  status TEXT NOT NULL DEFAULT 'booked',         -- booked | cancelled | attended | no_show
+  note TEXT,
+  exception_id INTEGER,                          -- the schedule_exceptions row created for a makeup
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_bookings_session ON bookings(session_id, status);
+CREATE INDEX IF NOT EXISTS idx_bookings_school ON bookings(school_id, status);
 `;
 
 export function initSchema() {
@@ -314,6 +356,9 @@ export function initSchema() {
   addCol('ALTER TABLE students ADD COLUMN recipient_type TEXT');
   // customizable homework-notification template. Placeholders: {ผู้รับ} {ชื่อ} {หัวข้อ} {รายละเอียด} {กำหนดส่ง}
   addCol('ALTER TABLE schools ADD COLUMN homework_message_template TEXT');
+  // LINE welcome message when parent/student links their account
+  addCol('ALTER TABLE schools ADD COLUMN line_welcome_enabled INTEGER NOT NULL DEFAULT 1');
+  addCol('ALTER TABLE schools ADD COLUMN line_welcome_message TEXT');
   // subscription plan: trial | starter | pro | premium | cancelled
   addCol("ALTER TABLE schools ADD COLUMN plan TEXT NOT NULL DEFAULT 'trial'");
   // ISO datetime when current plan/trial expires; NULL means no expiry set yet

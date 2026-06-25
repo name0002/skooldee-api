@@ -62,6 +62,13 @@
     classConfirmations: function (date)    { return req('/api/schedule/confirmations?date=' + encodeURIComponent(date)); },
     addException:       function (d)       { return req('/api/schedule/exceptions',    { method:'POST', body: JSON.stringify(d) }); },
     deleteException:    function (id)      { return req('/api/schedule/exceptions/'+id, { method:'DELETE' }); },
+    /* ---- Self-service bookable sessions ---- */
+    bookableSessions:  function (q)        { return req('/api/schedule/sessions' + (q ? '?' + new URLSearchParams(q) : '')); },
+    createSession:     function (d)        { return req('/api/schedule/sessions',       { method:'POST',  body: JSON.stringify(d) }); },
+    patchSession:      function (id, d)    { return req('/api/schedule/sessions/'+id,    { method:'PATCH', body: JSON.stringify(d) }); },
+    deleteSession:     function (id)       { return req('/api/schedule/sessions/'+id,    { method:'DELETE' }); },
+    sessionBookings:   function (id)       { return req('/api/schedule/sessions/'+id+'/bookings'); },
+    patchBooking:      function (id, d)    { return req('/api/schedule/bookings/'+id,     { method:'PATCH', body: JSON.stringify(d) }); },
     attendance: function (dt)  { return req('/api/attendance' + (dt ? '?date=' + dt : '')); },
     invoices:  function ()     { return req('/api/finance/invoices'); },
     homework:  function ()     { return req('/api/homework'); },
@@ -123,5 +130,8 @@
       return req('/api/stripe/create-checkout', { method: 'POST', body: JSON.stringify({ plan: plan, cycle: cycle }) });
     },
     stripePortal: function () { return req('/api/stripe/portal'); },
+
+    /* ---- Platform super-admin ---- */
+    adminSchools: function () { return req('/api/admin/schools'); },
   };
 })();

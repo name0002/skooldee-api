@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="robots" content="noindex"/>
+<title>จองคลาส · skooldee</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --teal:#009488; --teal-soft:#d6f0ec; --teal-dk:#0a7a70;
+    --orange:#F97316; --orange-soft:#FFEDD5;
+    --ink:#1a2b29; --ink-2:#4b6360; --ink-3:#8aa49e;
+    --line:#e5ecea; --bg:#f0f5f4; --white:#fff;
+    --radius:16px; --radius-sm:10px;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:'Instrument Sans','Sarabun',sans-serif; background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased; }
+  .wrap{ max-width:500px; margin:0 auto; }
+
+  .hdr{ background:linear-gradient(140deg,#0a7a70,var(--teal) 55%,#11a393); color:#fff; padding:28px 22px 32px; border-radius:0 0 28px 28px; text-align:center; }
+  .hdr-logo{ width:72px; height:72px; object-fit:contain; border-radius:14px; display:block; margin:0 auto 10px; background:#fff; }
+  .hdr-av{ width:72px; height:72px; background:rgba(255,255,255,.22); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:800; margin:0 auto 10px; }
+  .hdr-school{ font-size:20px; font-weight:800; margin-bottom:3px; }
+  .hdr-sub{ font-size:13px; opacity:.85; }
+  .hdr-badge{ display:inline-block; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.3); border-radius:99px; padding:3px 14px; font-size:12px; margin-top:10px; }
+
+  .sec-title{ font-size:14px; font-weight:700; color:var(--ink-2); margin:20px 16px 10px; }
+
+  .scard{ background:var(--white); border-radius:var(--radius); padding:16px 18px; margin:0 14px 12px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  .scard.full{ opacity:.62; }
+  .scard-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .kind-badge{ display:inline-block; font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:99px; }
+  .kind-group{ background:var(--teal-soft); color:var(--teal-dk); }
+  .kind-private{ background:#ede9fe; color:#6d28d9; }
+  .kind-makeup{ background:var(--orange-soft); color:#c2410c; }
+  .kind-trial{ background:#dcfce7; color:#15803d; }
+  .scard-title{ font-size:16px; font-weight:700; margin:8px 0 2px; }
+  .scard-meta{ font-size:13.5px; color:var(--ink-2); line-height:1.7; margin-top:6px; }
+  .scard-meta .ic{ display:inline-block; width:18px; }
+  .seats{ font-size:12.5px; font-weight:600; margin-top:8px; }
+  .seats.ok{ color:var(--teal-dk); }
+  .seats.low{ color:#c2410c; }
+  .seats.none{ color:#b91c1c; }
+  .fee{ font-size:13.5px; font-weight:700; color:var(--orange); }
+
+  .btn{ display:inline-block; width:100%; margin-top:12px; padding:12px; background:var(--teal); color:#fff; font-family:inherit;
+    font-size:15px; font-weight:700; border:none; border-radius:var(--radius-sm); cursor:pointer; transition:opacity .15s; }
+  .btn:hover{ opacity:.9; }
+  .btn:disabled{ background:#cbd5d3; cursor:not-allowed; }
+
+  /* prospect form (revealed on tap) */
+  .pf{ margin-top:12px; border-top:1px dashed var(--line); padding-top:12px; }
+  .pf .field{ margin-bottom:10px; }
+  .pf label{ display:block; font-size:12.5px; font-weight:600; margin-bottom:5px; color:var(--ink-2); }
+  .pf label span{ color:#e53e3e; }
+  .pf input{ width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:var(--radius-sm); font-family:inherit; font-size:15px; outline:none; }
+  .pf input:focus{ border-color:var(--teal); }
+  .err{ display:none; background:#fee2e2; color:#991b1b; border-radius:8px; padding:9px 12px; font-size:13px; margin-top:8px; }
+
+  .state{ text-align:center; padding:50px 24px; color:var(--ink-3); }
+  .state .big{ font-size:52px; margin-bottom:14px; }
+  .state h2{ font-size:19px; font-weight:700; color:var(--ink); margin-bottom:8px; }
+  .state p{ font-size:14px; line-height:1.6; }
+
+  .success{ background:var(--white); border-radius:var(--radius); padding:32px 24px; margin:24px 14px 0; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+  .success .icon{ font-size:52px; margin-bottom:16px; }
+  .success h2{ font-size:20px; font-weight:800; margin-bottom:8px; }
+  .success p{ font-size:14px; color:var(--ink-2); line-height:1.7; }
+  .success .detail{ background:var(--bg); border-radius:12px; padding:14px; margin:16px 0; font-size:14px; text-align:left; line-height:1.9; }
+
+  .skel{ height:108px; border-radius:var(--radius); background:linear-gradient(90deg,#edf2f1,#f5f7f6,#edf2f1);
+    background-size:200% 100%; animation:sh 1.3s infinite; margin:0 14px 12px; }
+  @keyframes sh{ 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  .foot{ text-align:center; font-size:12px; color:var(--ink-3); padding:24px 16px 40px; }
+  .foot a{ color:var(--teal); text-decoration:none; }
+</style>
+</head>
+<body>
+<div id="root" class="wrap">
+  <div class="hdr"><div class="hdr-av">⏳</div><div class="hdr-school">กำลังโหลด…</div></div>
+  <div class="skel"></div><div class="skel"></div>
+</div>
+
+<script>
+var API_BASE = 'https://skooldee-api-production.up.railway.app';
+
+function qp(k){ return new URLSearchParams(location.search).get(k); }
+var TOKEN = qp('token') || '';
+var SLUG  = qp('school') || qp('slug') || '';
+
+var DATA = null; // { school, school_logo, student, sessions }
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function root(html){ document.getElementById('root').innerHTML = html; }
+
+function showError(msg){
+  root('<div class="hdr"><div class="hdr-av">🔍</div><div class="hdr-school">ไม่พบลิงก์</div></div>'
+    +'<div class="state"><div class="big">😕</div><h2>ลิงก์ไม่ถูกต้อง</h2><p>'+esc(msg||'กรุณาขอลิงก์จองคลาสจากทางโรงเรียนอีกครั้งค่ะ')+'</p></div>'
+    +'<div class="foot">ขับเคลื่อนโดย <a href="https://skooldee.com">skooldee</a></div>');
+}
+
+function hdr(d){
+  var logo = d.school_logo
+    ? '<img class="hdr-logo" src="'+esc(d.school_logo)+'" alt="โลโก้"/>'
+    : '<div class="hdr-av">'+esc((d.school||'S')[0].toUpperCase())+'</div>';
+  var who = d.student ? ('สวัสดีค่ะ '+esc(d.student.nickname||d.student.name)) : 'เลือกคลาสที่ต้องการจอง';
+  return '<div class="hdr">'+logo
+    +'<div class="hdr-school">'+esc(d.school||'โรงเรียน')+'</div>'
+    +'<div class="hdr-sub">'+who+'</div>'
+    +'<div class="hdr-badge">📅 จองคลาสเรียน</div></div>';
+}
+
+function fmtDate(iso){
+  // 2026-06-28 → 28 มิ.ย. 2569
+  var M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var p=String(iso||'').split('-'); if(p.length!==3) return iso||'';
+  return parseInt(p[2])+' '+M[parseInt(p[1])-1]+' '+(parseInt(p[0])+543);
+}
+
+function sessionCard(s){
+  var full = s.full || s.seats_left<=0;
+  var seatCls = full?'none':(s.seats_left<=3?'low':'ok');
+  var seatTxt = full?'❌ เต็มแล้ว':('ว่าง '+s.seats_left+' ที่');
+  var meta =
+      '<div class="scard-meta">'
+    + '<div><span class="ic">📅</span>'+esc(s.day)+' '+fmtDate(s.date)+'</div>'
+    + '<div><span class="ic">🕐</span>'+esc(s.start)+'–'+esc(s.end)+' น.</div>'
+    + (s.teacher ? '<div><span class="ic">👩‍🏫</span>'+esc(s.teacher)+'</div>' : '')
+    + (s.room ? '<div><span class="ic">🚪</span>'+esc(s.room)+'</div>' : '')
+    + (s.fee!=null ? '<div><span class="ic">💰</span><span class="fee">'+Number(s.fee).toLocaleString()+' บาท</span></div>' : '')
+    + '</div>';
+  var btn = full
+    ? '<button class="btn" disabled>เต็มแล้ว</button>'
+    : '<button class="btn" id="bk-'+s.id+'" onclick="onBook('+s.id+')">จองคลาสนี้</button>';
+  return '<div class="scard'+(full?' full':'')+'" id="card-'+s.id+'">'
+    + '<div class="scard-top"><span class="kind-badge kind-'+esc(s.kind)+'">'+esc(s.kind_label)+'</span>'
+    + '<span class="seats '+seatCls+'">'+seatTxt+'</span></div>'
+    + '<div class="scard-title">'+esc(s.title||s.kind_label)+(s.category?' · '+esc(s.category):'')+'</div>'
+    + meta
+    + '<div class="err" id="err-'+s.id+'"></div>'
+    + '<div id="slot-'+s.id+'">'+btn+'</div>'
+    + '</div>';
+}
+
+function render(d){
+  DATA = d;
+  document.title = 'จองคลาส · '+esc(d.school||'skooldee');
+  if(!d.sessions || !d.sessions.length){
+    root(hdr(d)
+      +'<div class="state"><div class="big">🗓️</div><h2>ยังไม่มีคลาสให้จอง</h2><p>ขณะนี้ยังไม่มีคลาสที่เปิดให้จอง<br/>กรุณากลับมาตรวจสอบใหม่ภายหลังค่ะ</p></div>'
+      +'<div class="foot">ขับเคลื่อนโดย <a href="https://skooldee.com">skooldee</a></div>');
+    return;
+  }
+  var cards = d.sessions.map(sessionCard).join('');
+  root(hdr(d)
+    +'<div class="sec-title">คลาสที่เปิดให้จอง ('+d.sessions.length+')</div>'
+    + cards
+    +'<div class="foot">ขับเคลื่อนโดย <a href="https://skooldee.com">skooldee</a></div>');
+}
+
+function showErr(id,msg){ var e=document.getElementById('err-'+id); if(e){ e.textContent=msg; e.style.display='block'; } }
+
+// existing student → confirm + book directly. prospect → reveal a mini form first.
+function onBook(id){
+  var e=document.getElementById('err-'+id); if(e) e.style.display='none';
+  if(DATA && DATA.student){
+    if(!confirm('ยืนยันการจองคลาสนี้?')) return;
+    doBook(id, {});
+    return;
+  }
+  // prospect: reveal form
+  document.getElementById('slot-'+id).innerHTML =
+      '<div class="pf">'
+    + '<div class="field"><label>ชื่อ-นามสกุล <span>*</span></label><input id="pf-name-'+id+'" placeholder="ชื่อผู้เรียน" maxlength="100"/></div>'
+    + '<div class="field"><label>เบอร์โทร <span>*</span></label><input id="pf-phone-'+id+'" type="tel" placeholder="081-234-5678" maxlength="20"/></div>'
+    + '<div class="field"><label>LINE ID (ถ้ามี)</label><input id="pf-line-'+id+'" placeholder="@lineid" maxlength="60"/></div>'
+    + '<button class="btn" onclick="submitProspect('+id+')">ยืนยันการจอง ✅</button>'
+    + '</div>';
+}
+
+function submitProspect(id){
+  var name=(document.getElementById('pf-name-'+id)||{}).value||'';
+  var phone=(document.getElementById('pf-phone-'+id)||{}).value||'';
+  var line=(document.getElementById('pf-line-'+id)||{}).value||'';
+  if(!name.trim()){ showErr(id,'กรุณากรอกชื่อ'); return; }
+  if(!phone.trim()){ showErr(id,'กรุณากรอกเบอร์โทร'); return; }
+  doBook(id, { name:name.trim(), phone:phone.trim(), line:line.trim() });
+}
+
+function doBook(id, extra){
+  var body = { session_id:id };
+  if(TOKEN) body.token=TOKEN; else body.slug=SLUG;
+  if(extra.name) body.name=extra.name;
+  if(extra.phone) body.phone=extra.phone;
+  if(extra.line) body.line=extra.line;
+
+  var slot=document.getElementById('slot-'+id);
+  if(slot) slot.innerHTML='<button class="btn" disabled>กำลังจอง…</button>';
+
+  fetch(API_BASE+'/api/public/book',{
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+  })
+  .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||'จองไม่สำเร็จ'); return j; }); })
+  .then(function(j){ renderSuccess(j.session); })
+  .catch(function(err){
+    showErr(id, err.message||'เกิดข้อผิดพลาด');
+    render(DATA); // restore the list so they can retry / pick another
+    setTimeout(function(){ showErr(id, err.message||'เกิดข้อผิดพลาด'); },0);
+  });
+}
+
+function renderSuccess(s){
+  var d=DATA||{};
+  var detail = s ? '<div class="detail">'
+    + '<b>'+esc(s.title||s.kind_label||'คลาส')+'</b><br/>'
+    + '📅 '+esc(s.day||'')+' '+fmtDate(s.date)+'<br/>'
+    + '🕐 '+esc(s.start)+'–'+esc(s.end)+' น.'
+    + (s.fee!=null?'<br/>💰 '+Number(s.fee).toLocaleString()+' บาท':'')
+    + '</div>' : '';
+  root(hdr(d)
+    +'<div class="success"><div class="icon">🎉</div>'
+    +'<h2>จองคลาสสำเร็จ!</h2>'
+    +'<p>ทางโรงเรียนได้รับการจองของคุณแล้วค่ะ</p>'
+    + detail
+    +'<p style="font-size:13px;color:var(--ink-3)">หากต้องการยกเลิก กรุณาติดต่อทางโรงเรียนโดยตรง</p>'
+    +'</div>'
+    +'<div class="foot">ขับเคลื่อนโดย <a href="https://skooldee.com">skooldee</a></div>');
+  window.scrollTo(0,0);
+}
+
+window.onBook=onBook; window.submitProspect=submitProspect;
+
+// ---- boot ----
+if(!TOKEN && !SLUG){ showError('ไม่พบ URL ของโรงเรียน'); }
+else {
+  var url = API_BASE+'/api/public/book?'+(TOKEN?('token='+encodeURIComponent(TOKEN)):('slug='+encodeURIComponent(SLUG)));
+  fetch(url)
+    .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+    .then(render)
+    .catch(function(){ showError('ไม่พบข้อมูลการจอง'); });
+}
+</script>
+</body>
+</html>

@@ -139,6 +139,119 @@ r.delete('/exceptions/:id', canManage, wrap((req, res) => {
   res.json({ ok: true });
 }));
 
+// ============================================================================
+//  Self-service bookable sessions (admin side). Parents/prospects book seats in
+//  these through the public /api/public/book routes. One table, many `kind`s.
+// ============================================================================
+
+const KINDS = ['group', 'private', 'makeup', 'trial'];
+const OPEN_TO = ['existing', 'public', 'both'];
+
+// count seats taken (a cancelled/no_show booking frees the seat back up)
+const seatsTaken = (sessionId) =>
+  get(`SELECT COUNT(*) AS n FROM bookings WHERE session_id = ? AND status IN ('booked','attended')`, sessionId).n;
+
+const withCounts = (s) => {
+  const booked = seatsTaken(s.id);
+  return { ...s, start: hhmm(s.start_min), end: hhmm(s.end_min), booked, seats_left: Math.max(0, s.capacity - booked) };
+};
+
+// GET /api/schedule/sessions?from=YYYY-MM-DD&to=YYYY-MM-DD&kind=
+r.get('/sessions', wrap((req, res) => {
+  let rows = all(
+    `SELECT bs.*, t.name AS teacher_name FROM bookable_sessions bs
+       LEFT JOIN teachers t ON t.id = bs.teacher_id
+      WHERE bs.school_id = ? ORDER BY bs.date, bs.start_min`, req.schoolId);
+  if (req.scopeOwn) rows = rows.filter((s) => s.teacher_id === req.teacherId);
+  if (req.query.from) rows = rows.filter((s) => s.date >= req.query.from);
+  if (req.query.to) rows = rows.filter((s) => s.date <= req.query.to);
+  if (req.query.kind) rows = rows.filter((s) => s.kind === req.query.kind);
+  res.json(rows.map(withCounts));
+}));
+
+// POST /api/schedule/sessions — publish a bookable session
+r.post('/sessions', canManage, wrap((req, res) => {
+  const b = required(req.body, ['date', 'start_min', 'end_min']);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date)) throw bad('date must be YYYY-MM-DD');
+  const kind = KINDS.includes(b.kind) ? b.kind : 'group';
+  const openTo = OPEN_TO.includes(b.open_to) ? b.open_to : 'existing';
+  if (b.teacher_id && !get('SELECT id FROM teachers WHERE id = ? AND school_id = ?', b.teacher_id, req.schoolId)) throw bad('teacher not found', 404);
+  const cap = Math.max(1, parseInt(b.capacity) || (kind === 'group' ? 6 : 1));
+  const fee = (b.fee != null && b.fee !== '') ? Math.max(0, parseInt(b.fee) || 0) : null;
+  const result = run(
+    `INSERT INTO bookable_sessions (school_id, teacher_id, kind, title, category, date, start_min, end_min, capacity, room, fee, open_to, note)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    req.schoolId, b.teacher_id || null, kind, b.title || null, b.category || null, b.date,
+    b.start_min, b.end_min, cap, (b.room != null && b.room !== '') ? String(b.room).slice(0, 60) : null,
+    fee, openTo, b.note || null);
+  res.status(201).json(withCounts(get('SELECT * FROM bookable_sessions WHERE id = ?', Number(result.lastInsertRowid))));
+}));
+
+// PATCH /api/schedule/sessions/:id — edit a session (incl. open/close/cancel via status)
+r.patch('/sessions/:id', canManage, wrap((req, res) => {
+  const s = get('SELECT * FROM bookable_sessions WHERE id = ? AND school_id = ?', req.params.id, req.schoolId);
+  if (!s) throw bad('session not found', 404);
+  const b = req.body || {};
+  const sets = [], vals = [];
+  const push = (col, v) => { sets.push(`${col} = ?`); vals.push(v); };
+  if (b.title !== undefined) push('title', b.title || null);
+  if (b.category !== undefined) push('category', b.category || null);
+  if (b.room !== undefined) push('room', (b.room === '' || b.room === null) ? null : String(b.room).slice(0, 60));
+  if (b.note !== undefined) push('note', b.note || null);
+  if (b.date !== undefined) { if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date)) throw bad('date must be YYYY-MM-DD'); push('date', b.date); }
+  if (b.start_min !== undefined) push('start_min', Math.max(0, Math.min(1439, parseInt(b.start_min) || 0)));
+  if (b.end_min !== undefined) push('end_min', Math.max(1, Math.min(1440, parseInt(b.end_min) || 0)));
+  if (b.capacity !== undefined) push('capacity', Math.max(1, parseInt(b.capacity) || 1));
+  if (b.fee !== undefined) push('fee', (b.fee === '' || b.fee === null) ? null : Math.max(0, parseInt(b.fee) || 0));
+  if (b.kind !== undefined && KINDS.includes(b.kind)) push('kind', b.kind);
+  if (b.open_to !== undefined && OPEN_TO.includes(b.open_to)) push('open_to', b.open_to);
+  if (b.status !== undefined && ['open', 'closed', 'cancelled'].includes(b.status)) push('status', b.status);
+  if (b.teacher_id !== undefined) {
+    if (b.teacher_id && !get('SELECT id FROM teachers WHERE id = ? AND school_id = ?', b.teacher_id, req.schoolId)) throw bad('teacher not found', 404);
+    push('teacher_id', b.teacher_id || null);
+  }
+  if (!sets.length) throw bad('no fields to update');
+  run(`UPDATE bookable_sessions SET ${sets.join(', ')} WHERE id = ? AND school_id = ?`, ...vals, s.id, req.schoolId);
+  res.json(withCounts(get('SELECT * FROM bookable_sessions WHERE id = ?', s.id)));
+}));
+
+// DELETE /api/schedule/sessions/:id
+r.delete('/sessions/:id', canManage, wrap((req, res) => {
+  const result = run('DELETE FROM bookable_sessions WHERE id = ? AND school_id = ?', req.params.id, req.schoolId);
+  if (!result.changes) throw bad('session not found', 404);
+  res.json({ ok: true });
+}));
+
+// GET /api/schedule/sessions/:id/bookings — who has booked this session
+r.get('/sessions/:id/bookings', wrap((req, res) => {
+  const s = get('SELECT id FROM bookable_sessions WHERE id = ? AND school_id = ?', req.params.id, req.schoolId);
+  if (!s) throw bad('session not found', 404);
+  const rows = all(
+    `SELECT b.*, st.name AS student_name, st.nickname AS student_nick
+       FROM bookings b LEFT JOIN students st ON st.id = b.student_id
+      WHERE b.session_id = ? ORDER BY b.created_at`, s.id);
+  res.json(rows.map((b) => ({
+    id: b.id, status: b.status, note: b.note, created_at: b.created_at,
+    student_id: b.student_id,
+    name: b.student_name || b.booker_name || '—',
+    nickname: b.student_nick || null,
+    phone: b.booker_phone || null,
+    line: b.booker_line || null,
+    is_prospect: !b.student_id,
+  })));
+}));
+
+// PATCH /api/schedule/bookings/:id — mark attended / no_show / cancel
+r.patch('/bookings/:id', canManage, wrap((req, res) => {
+  const bk = get(
+    `SELECT b.* FROM bookings b WHERE b.id = ? AND b.school_id = ?`, req.params.id, req.schoolId);
+  if (!bk) throw bad('booking not found', 404);
+  const status = req.body && req.body.status;
+  if (!['booked', 'cancelled', 'attended', 'no_show'].includes(status)) throw bad('invalid status');
+  run('UPDATE bookings SET status = ? WHERE id = ? AND school_id = ?', status, bk.id, req.schoolId);
+  res.json({ ok: true });
+}));
+
 // PATCH /api/schedule/:id — update a recurring slot (used by drag-to-reschedule "move permanently")
 r.patch('/:id', canManage, wrap((req, res) => {
   const slot = get('SELECT * FROM schedule_slots WHERE id = ? AND school_id = ?', req.params.id, req.schoolId);

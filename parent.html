@@ -591,6 +591,9 @@
     } else {
       html += '<div class="empty">— ยังไม่มีตารางเรียน —</div>';
     }
+    html += '<a href="book.html?token='+encodeURIComponent(childToken)+'" '+
+      'style="display:block;text-align:center;margin-top:12px;padding:11px;background:var(--teal);color:#fff;'+
+      'border-radius:10px;font-weight:700;font-size:14.5px;text-decoration:none">📅 จองคลาสเพิ่ม / เรียนชดเชย</a>';
     html += '</div>';
 
     /* ── HOMEWORK ── */

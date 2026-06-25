@@ -2,10 +2,12 @@ import { Router } from 'express';
 import { all, get, run } from '../db.js';
 import { wrap, bad, hhmm } from '../util.js';
 import { sendEmail, tplNewEnrollment } from '../email.js';
+import { maybeNotifyTeacher } from '../line-push.js';
 
 const r = Router();
 
 const DOW = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์', 'อาทิตย์'];
+const KIND_LABEL = { group: 'คลาสกลุ่ม', private: 'เรียนตัวต่อตัว', makeup: 'เรียนชดเชย', trial: 'ทดลองเรียน' };
 
 // Build the non-sensitive parent-portal payload for one student row.
 // Never includes phone/parent name/finance internals beyond the unpaid balance.
@@ -386,5 +388,173 @@ async function notifyNewEnrollment(school, data) {
     try { await sendEmail({ to: a.email, subject: tpl.subject, html: tpl.html }); } catch { /* swallow */ }
   }
 }
+
+// ============================================================================
+//  Self-service booking (NO AUTH). Two entry points:
+//    ?token=<parent_token>  → an existing student books (sees existing|both)
+//    ?slug=<school slug>    → a new prospect books (sees public|both, e.g. trials)
+// ============================================================================
+
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const seatsTaken = (sessionId) =>
+  get(`SELECT COUNT(*) AS n FROM bookings WHERE session_id = ? AND status IN ('booked','attended')`, sessionId).n;
+
+// Resolve who is asking from token/slug → { school, student? } or throw 404.
+function resolveBooker(token, slug) {
+  if (token && token.length >= 8) {
+    const student = get('SELECT * FROM students WHERE parent_token = ?', token);
+    if (!student) throw bad('not found', 404);
+    const school = get('SELECT id, name, slug, logo_image, contact_phone FROM schools WHERE id = ?', student.school_id);
+    return { school, student };
+  }
+  if (slug) {
+    const school = get('SELECT id, name, slug, logo_image, contact_phone FROM schools WHERE LOWER(slug) = ?', String(slug).toLowerCase().trim());
+    if (!school) throw bad('not found', 404);
+    return { school, student: null };
+  }
+  throw bad('missing token or slug', 400);
+}
+
+function publicSession(s) {
+  const booked = seatsTaken(s.id);
+  return {
+    id: s.id,
+    kind: s.kind,
+    kind_label: KIND_LABEL[s.kind] || s.kind,
+    title: s.title || null,
+    category: s.category || null,
+    teacher: s.teacher_name || null,
+    date: s.date,
+    day: DOW[(new Date(s.date + 'T00:00:00Z').getUTCDay() + 6) % 7] || '',
+    start: hhmm(s.start_min),
+    end: hhmm(s.end_min),
+    room: s.room || null,
+    fee: s.fee != null ? s.fee : null,
+    seats_left: Math.max(0, s.capacity - booked),
+    full: booked >= s.capacity,
+  };
+}
+
+// GET /api/public/book?token=  OR  ?slug=  → school info + open future sessions you can book
+r.get('/book', wrap((req, res) => {
+  const { school, student } = resolveBooker(req.query.token, req.query.slug);
+  const visible = student ? ['existing', 'both'] : ['public', 'both'];
+  const rows = all(
+    `SELECT bs.*, t.name AS teacher_name FROM bookable_sessions bs
+       LEFT JOIN teachers t ON t.id = bs.teacher_id
+      WHERE bs.school_id = ? AND bs.status = 'open' AND bs.date >= ?
+      ORDER BY bs.date, bs.start_min`,
+    school.id, todayStr());
+  const sessions = rows.filter((s) => visible.includes(s.open_to)).map(publicSession);
+  res.json({
+    school: school.name,
+    school_logo: school.logo_image || null,
+    school_contact_phone: school.contact_phone || null,
+    student: student ? { name: student.name, nickname: student.nickname || null } : null,
+    sessions,
+  });
+}));
+
+// POST /api/public/book — book a seat.
+// Body: { session_id, token?, slug?, name?, phone?, line?, note? }
+r.post('/book', wrap((req, res) => {
+  const b = req.body || {};
+  const sessionId = parseInt(b.session_id) || 0;
+  if (!sessionId) throw bad('session_id required');
+  const { school, student } = resolveBooker(b.token, b.slug);
+
+  const s = get('SELECT * FROM bookable_sessions WHERE id = ? AND school_id = ?', sessionId, school.id);
+  if (!s) throw bad('ไม่พบคลาสนี้', 404);
+  if (s.status !== 'open') throw bad('คลาสนี้ปิดรับจองแล้ว');
+  if (s.date < todayStr()) throw bad('คลาสนี้ผ่านไปแล้ว');
+
+  const allowed = student ? ['existing', 'both'] : ['public', 'both'];
+  if (!allowed.includes(s.open_to)) throw bad('คุณไม่มีสิทธิ์จองคลาสนี้', 403);
+
+  // prospect bookings need contact details
+  let name = null, phone = null, line = null;
+  if (!student) {
+    name = String(b.name || '').trim().slice(0, 100);
+    phone = String(b.phone || '').trim().slice(0, 30);
+    line = String(b.line || '').trim().slice(0, 60) || null;
+    if (!name) throw bad('กรุณากรอกชื่อ');
+    if (!phone) throw bad('กรุณากรอกเบอร์โทร');
+  } else {
+    // no double-booking the same session
+    const dup = get(
+      `SELECT id FROM bookings WHERE session_id = ? AND student_id = ? AND status IN ('booked','attended')`,
+      s.id, student.id);
+    if (dup) throw bad('คุณจองคลาสนี้ไว้แล้ว');
+  }
+
+  // capacity — synchronous count+insert, so no race in better-sqlite3
+  if (seatsTaken(s.id) >= s.capacity) throw bad('คลาสนี้เต็มแล้ว', 409);
+
+  // a makeup booking by an existing student also lands on the live schedule (+ notifies teacher)
+  let exceptionId = null;
+  if (s.kind === 'makeup' && student) {
+    const exRes = run(
+      `INSERT INTO schedule_exceptions (school_id, slot_id, date, type, student_id, teacher_id, category, start_min, end_min, note)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      school.id, null, s.date, 'makeup', student.id, s.teacher_id || null, s.category || null,
+      s.start_min, s.end_min, 'จองชดเชยผ่านลิงก์');
+    exceptionId = Number(exRes.lastInsertRowid);
+  }
+
+  const result = run(
+    `INSERT INTO bookings (school_id, session_id, student_id, booker_name, booker_phone, booker_line, note, exception_id)
+     VALUES (?,?,?,?,?,?,?,?)`,
+    school.id, s.id, student ? student.id : null, name, phone, line,
+    String(b.note || '').trim().slice(0, 300) || null, exceptionId);
+
+  // notify the teacher their schedule gained a makeup class
+  if (exceptionId && s.teacher_id) {
+    const who = student ? (student.nickname || student.name) : (name || 'นักเรียน');
+    maybeNotifyTeacher(school.id, s.teacher_id, 't_change',
+      `🗓️ มีการจองเรียนชดเชย\nวันที่ ${s.date} เวลา ${hhmm(s.start_min)}–${hhmm(s.end_min)} น.\nนักเรียน: ${who}`);
+  }
+
+  // a trial booking by a prospect also drops into the admin's enrollment-requests inbox
+  if (s.kind === 'trial' && !student) {
+    try {
+      run(
+        `INSERT INTO enrollment_requests (school_id, student_name, parent_name, phone, line_id, category, note)
+         VALUES (?,?,?,?,?,?,?)`,
+        school.id, name, null, phone, line, s.category || null,
+        `ทดลองเรียน ${s.date} ${hhmm(s.start_min)}–${hhmm(s.end_min)} น.`);
+    } catch { /* non-fatal */ }
+  }
+
+  res.status(201).json({
+    ok: true,
+    booking_id: Number(result.lastInsertRowid),
+    session: publicSession({ ...s, teacher_name: null }),
+  });
+}));
+
+// POST /api/public/book/cancel — cancel a booking (token-scoped, or by booking id + phone)
+r.post('/book/cancel', wrap((req, res) => {
+  const b = req.body || {};
+  const bookingId = parseInt(b.booking_id) || 0;
+  if (!bookingId) throw bad('booking_id required');
+  const bk = get('SELECT * FROM bookings WHERE id = ?', bookingId);
+  if (!bk) throw bad('not found', 404);
+
+  // authorize: existing student via their token, or prospect via matching phone
+  if (b.token && String(b.token).length >= 8) {
+    const student = get('SELECT id FROM students WHERE parent_token = ?', b.token);
+    if (!student || bk.student_id !== student.id) throw bad('not found', 404);
+  } else if (b.phone) {
+    if (!bk.booker_phone || bk.booker_phone !== String(b.phone).trim()) throw bad('not found', 404);
+  } else {
+    throw bad('missing token or phone', 400);
+  }
+  if (bk.status === 'cancelled') return res.json({ ok: true });
+
+  run("UPDATE bookings SET status = 'cancelled' WHERE id = ?", bk.id);
+  // a makeup booking also removes itself from the live schedule
+  if (bk.exception_id) run('DELETE FROM schedule_exceptions WHERE id = ? AND school_id = ?', bk.exception_id, bk.school_id);
+  res.json({ ok: true });
+}));
 
 export default r;
