@@ -19,7 +19,7 @@ const r = Router();
  */
 r.post('/webhook/:schoolId', async (req, res) => {
   const sid = Number(req.params.schoolId);
-  const school = get('SELECT line_token, line_secret FROM schools WHERE id = ?', sid);
+  const school = get('SELECT line_token, line_secret, line_welcome_enabled, line_welcome_message FROM schools WHERE id = ?', sid);
   if (!school) return res.sendStatus(404);
 
   // verify LINE signature if a channel secret is configured (recommended)
@@ -115,12 +115,14 @@ r.post('/webhook/:schoolId', async (req, res) => {
         sid, code);
       if (teacher) {
         run('UPDATE teachers SET line_user_id = ? WHERE id = ?', userId, teacher.id);
-        await reply(school.line_token, ev.replyToken,
-          `เชื่อมต่อสำเร็จ ✓\n\nครู${teacher.name} จะได้รับแจ้งเตือนตารางสอนและข่าวสารผ่าน LINE นี้แล้วค่ะ 🎉`);
+        const defaultMsg = `เชื่อมต่อสำเร็จ ✓\n\nครู${teacher.name} จะได้รับแจ้งเตือนตารางสอนและข่าวสารผ่าน LINE นี้แล้วค่ะ 🎉`;
+        const msg = school.line_welcome_enabled && school.line_welcome_message ? school.line_welcome_message : defaultMsg;
+        await reply(school.line_token, ev.replyToken, msg);
       } else if (stu) {
         run('UPDATE students SET line_user_id = ? WHERE id = ?', userId, stu.id);
-        await reply(school.line_token, ev.replyToken,
-          `เชื่อมต่อสำเร็จ ✓\n\nคุณจะได้รับแจ้งเตือนของ ${stu.nickname || stu.name} ผ่าน LINE นี้แล้วค่ะ 🎉`);
+        const defaultMsg = `เชื่อมต่อสำเร็จ ✓\n\nคุณจะได้รับแจ้งเตือนของ ${stu.nickname || stu.name} ผ่าน LINE นี้แล้วค่ะ 🎉`;
+        const msg = school.line_welcome_enabled && school.line_welcome_message ? school.line_welcome_message : defaultMsg;
+        await reply(school.line_token, ev.replyToken, msg);
       } else {
         // it looked like a code but didn't match → soft, helpful reply (not robotic)
         await reply(school.line_token, ev.replyToken,

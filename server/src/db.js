@@ -304,6 +304,7 @@ export function initSchema() {
   // they manage) + per-user permission overrides { scope, pages } as JSON.
   addCol('ALTER TABLE users ADD COLUMN teacher_id INTEGER REFERENCES teachers(id) ON DELETE SET NULL');
   addCol('ALTER TABLE users ADD COLUMN permissions_json TEXT');
+  addCol('ALTER TABLE users ADD COLUMN phone TEXT');
   addCol("ALTER TABLE invoices ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'transfer'");
   addCol('ALTER TABLE students ADD COLUMN birthday TEXT');
   addCol('ALTER TABLE schools ADD COLUMN categories_json TEXT');

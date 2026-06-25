@@ -448,6 +448,7 @@ function PaymentSettingsSection({ showToast }){
 function ProfileSettingsSection({ showToast }){
   const user = DATA._userRaw || {};
   const [name, setName] = useState(user.name || DATA.SCHOOL.owner || '');
+  const [phone, setPhone] = useState(user.phone || '');
   const [busy, setBusy] = useState(false);
   const inp = useInpStyle();
 
@@ -457,7 +458,7 @@ function ProfileSettingsSection({ showToast }){
     setBusy(true);
     try{
       if(DATA.updateProfile){
-        await DATA.updateProfile({ name: name.trim() });
+        await DATA.updateProfile({ name: name.trim(), phone: phone.trim() });
         showToast('บันทึกข้อมูลผู้ใช้แล้ว ✓');
       } else {
         showToast('ใช้ได้เฉพาะ Live mode','error');
@@ -483,6 +484,10 @@ function ProfileSettingsSection({ showToast }){
           <div>
             <label style={{ display:'block', fontWeight:600, fontSize:13, marginBottom:6 }}>ชื่อ-นามสกุล</label>
             <input style={inp} value={name} onChange={e=>setName(e.target.value)} placeholder="ชื่อที่ต้องการแสดง"/>
+          </div>
+          <div>
+            <label style={{ display:'block', fontWeight:600, fontSize:13, marginBottom:6 }}>เบอร์โทร</label>
+            <input style={inp} value={phone} onChange={e=>setPhone(e.target.value)} placeholder="0812345678"/>
           </div>
           <div>
             <label style={{ display:'block', fontWeight:600, fontSize:13, marginBottom:6 }}>อีเมล (เปลี่ยนไม่ได้)</label>
@@ -1264,6 +1269,9 @@ function LineSettingsSection({ showToast }){
   const [savingTpl, setSavingTpl] = useState(false);
   const [hwTpl, setHwTpl] = useState('');
   const [savingHwTpl, setSavingHwTpl] = useState(false);
+  const [welcomeEnabled, setWelcomeEnabled] = useState(true);
+  const [welcomeMsg, setWelcomeMsg] = useState('');
+  const [savingWelcome, setSavingWelcome] = useState(false);
   const inp = useInpStyle();
   const slug = DATA._schoolRaw && DATA._schoolRaw.slug ? DATA._schoolRaw.slug : '';
 
@@ -1287,6 +1295,8 @@ function LineSettingsSection({ showToast }){
         setContactPhone(s.contact_phone||''); setOaUrl(s.line_oa_url||''); setLiffId(s.liff_id||'');
         setInviteTpl(s.invite_message_template||'');
         setHwTpl(s.homework_message_template||'');
+        setWelcomeEnabled(s.line_welcome_enabled!==false);
+        setWelcomeMsg(s.line_welcome_message||'');
         if(s.line_configured && window.API.testLine){
           window.API.testLine().then(r=>{ if(r.ok) setBot(r.bot); }).catch(()=>{});
         }
@@ -1351,6 +1361,17 @@ function LineSettingsSection({ showToast }){
       showToast(v?'บันทึกข้อความแจ้งการบ้านแล้ว ✓':'ล้างข้อความแล้ว — จะใช้ข้อความมาตรฐานของระบบ');
     }catch(ex){ showToast(ex.message||'บันทึกไม่สำเร็จ','error'); }
     setSavingHwTpl(false);
+  };
+
+  const saveWelcome = async()=>{
+    setSavingWelcome(true);
+    try{
+      const v = welcomeMsg.trim();
+      await window.API.updateSchool({ line_welcome_enabled: welcomeEnabled, line_welcome_message: v });
+      DATA._schoolRaw = { ...(DATA._schoolRaw||{}), line_welcome_enabled: welcomeEnabled, line_welcome_message: v||null };
+      showToast(v?'บันทึกข้อความต้อนรับแล้ว ✓':'ล้างข้อความแล้ว — จะใช้ข้อความมาตรฐานของระบบ');
+    }catch(ex){ showToast(ex.message||'บันทึกไม่สำเร็จ','error'); }
+    setSavingWelcome(false);
   };
 
   const saveLiff = async()=>{
@@ -1565,6 +1586,46 @@ function LineSettingsSection({ showToast }){
           </div>
           <button className="btn btn-primary" style={{ alignSelf:'flex-start', marginTop:12, padding:'9px 22px', fontWeight:700 }}
             disabled={savingHwTpl} onClick={saveHwTpl}>{savingHwTpl?'กำลังบันทึก…':'บันทึกข้อความ'}</button>
+        </SettingsCard>
+      )}
+
+      {/* customizable welcome message — sent when parent/student links their LINE account */}
+      {configured && (
+        <SettingsCard title="ข้อความต้อนรับ LINE" sub="ข้อความที่ส่งเมื่อผู้ปกครองหรือนักเรียนเชื่อมบัญชี LINE สำเร็จ (หรือเปิด/ปิดการส่งข้อความต้อนรับ)">
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+            <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:14, fontWeight:600 }}>
+              <input type="checkbox" checked={welcomeEnabled} onChange={e=>setWelcomeEnabled(e.target.checked)}
+                style={{ width:18, height:18, cursor:'pointer', accentColor:'var(--primary)' }}/>
+              <span>เปิดใช้งานการส่งข้อความต้อนรับ</span>
+            </label>
+          </div>
+          {welcomeEnabled && (
+            <>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
+                <span style={{ fontSize:12.5, color:'var(--text-3)', alignSelf:'center' }}>เลือกสไตล์สำเร็จรูป:</span>
+                <button className="btn btn-sm" style={{ fontSize:12.5 }}
+                  onClick={()=>setWelcomeMsg('เชื่อมต่อสำเร็จ ✓\n\nคุณจะได้รับแจ้งเตือนตารางเรียนและข่าวสารผ่าน LINE นี้แล้วค่ะ 🎉')}>
+                  🌸 อบอุ่น กันเอง
+                </button>
+                <button className="btn btn-sm" style={{ fontSize:12.5 }}
+                  onClick={()=>setWelcomeMsg('เชื่อมต่อสำเร็จ ✓\n\nระบบแจ้งเตือนถูกเปิดใช้งาน คุณจะได้รับข้อมูลการเรียนและข่าวสารต่างๆ ผ่านช่องทางนี้')}>
+                  🎓 มืออาชีพ
+                </button>
+                <button className="btn btn-sm" style={{ fontSize:12.5 }}
+                  onClick={()=>setWelcomeMsg('เชื่อมเสร็จแล้ว ✓ พร้อมรับข้อมูลติดตามผ่าน LINE')}>
+                  ⚡ กระชับ
+                </button>
+              </div>
+              <textarea style={{ ...inp, minHeight:100, lineHeight:1.6, resize:'vertical', fontFamily:'inherit' }}
+                value={welcomeMsg} onChange={e=>setWelcomeMsg(e.target.value)}
+                placeholder={"เว้นว่างไว้ = ใช้ข้อความมาตรฐานของระบบ\n\nข้อความมาตรฐาน:\n- สำหรับผู้ปกครอง: 'เชื่อมต่อสำเร็จ ✓\\n\\nคุณจะได้รับแจ้งเตือนของ [ชื่อน้อง] ผ่าน LINE นี้แล้วค่ะ 🎉'\n- สำหรับครู: 'เชื่อมต่อสำเร็จ ✓\\n\\n[ชื่อครู] จะได้รับแจ้งเตือนตารางสอนและข่าวสารผ่าน LINE นี้แล้วค่ะ 🎉'"}/>
+              <div style={{ fontSize:12.5, color:'var(--text-3)', marginTop:8, lineHeight:1.6 }}>
+                💡 เว้นว่างไว้เพื่อใช้ข้อความมาตรฐานของระบบแทน หากต้องการปิดการส่งข้อความต้อนรับให้ปิดการใช้งานด้านบน
+              </div>
+            </>
+          )}
+          <button className="btn btn-primary" style={{ alignSelf:'flex-start', marginTop:12, padding:'9px 22px', fontWeight:700 }}
+            disabled={savingWelcome} onClick={saveWelcome}>{savingWelcome?'กำลังบันทึก…':'บันทึกการตั้งค่า'}</button>
         </SettingsCard>
       )}
 
