@@ -2,7 +2,7 @@
 // Fires once per Bangkok day after a target hour; idempotent via app_meta markers,
 // so a process restart never double-sends and a missed window catches up next tick.
 import { all, get, run } from './db.js';
-import { pushRaw } from './line-push.js';
+import { pushRaw, notifyPlatformOwner } from './line-push.js';
 
 const TARGET_HOUR = Number(process.env.DAILY_NOTIFY_HOUR || 7); // Asia/Bangkok local hour
 const TICK_MS = 5 * 60 * 1000; // re-check every 5 minutes
@@ -137,6 +137,16 @@ async function runDaily(now) {
           `📅 พรุ่งนี้ (${DOW[tmr.dow]} ${tmr.day} ${THAI_MON[tmr.monthIdx]}) น้อง${s.nickname || s.name} มีเรียนค่ะ\n${lines}\n\nรบกวนกดยืนยัน หรือแจ้งลาล่วงหน้าได้เลยนะคะ 🙏`,
           quickReply);
       }
+    }
+  }
+
+  // 4) platform owner: ping when a school's trial expires tomorrow (regardless of
+  // whether that school itself has LINE configured — this is a platform-level alert)
+  const tmr = addDays(now, 1);
+  const trialSchools = all("SELECT name, plan_expires FROM schools WHERE plan = 'trial' AND plan_expires IS NOT NULL");
+  for (const sch of trialSchools) {
+    if (sch.plan_expires.slice(0, 10) === tmr.date) {
+      await notifyPlatformOwner(`⚠️ ${sch.name} trial หมดอายุพรุ่งนี้ (${tmr.date})`);
     }
   }
 }

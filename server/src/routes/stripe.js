@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { get, run } from '../db.js';
 import { wrap, bad } from '../util.js';
 import { requireAuth } from '../auth.js';
+import { notifyPlatformOwner } from '../line-push.js';
+import { PLANS } from '../plans.js';
 import Stripe from 'stripe';
 
 const r = Router();
@@ -112,24 +114,32 @@ r.post('/webhook', wrap(async (req, res) => {
       }
       run('UPDATE schools SET plan = ?, plan_expires = ?, stripe_subscription_id = ? WHERE id = ?',
         plan, expires, subId || null, schoolId);
+      const school = get('SELECT name FROM schools WHERE id = ?', schoolId);
+      notifyPlatformOwner(`✅ ${school?.name || 'โรงเรียน #' + schoolId} สมัครแพ็ค ${PLANS[plan]?.label || plan} แล้ว`);
     }
   }
 
   if (event.type === 'customer.subscription.updated') {
-    const school = get('SELECT id FROM schools WHERE stripe_customer_id = ?', obj.customer);
+    const school = get('SELECT id, name, plan FROM schools WHERE stripe_customer_id = ?', obj.customer);
     if (school) {
       const plan    = obj.metadata?.plan || 'pro';
       const expires = new Date(obj.current_period_end * 1000).toISOString();
       const active  = ['active', 'trialing'].includes(obj.status);
       run('UPDATE schools SET plan = ?, plan_expires = ? WHERE id = ?',
         active ? plan : 'cancelled', expires, school.id);
+      if (active && plan !== school.plan) {
+        notifyPlatformOwner(`✅ ${school.name} เปลี่ยนแพ็คเป็น ${PLANS[plan]?.label || plan}`);
+      } else if (!active) {
+        notifyPlatformOwner(`⚠️ ${school.name} subscription หยุดทำงาน (${obj.status})`);
+      }
     }
   }
 
   if (event.type === 'customer.subscription.deleted') {
-    const school = get('SELECT id FROM schools WHERE stripe_customer_id = ?', obj.customer);
+    const school = get('SELECT id, name FROM schools WHERE stripe_customer_id = ?', obj.customer);
     if (school) {
       run("UPDATE schools SET plan = 'cancelled', stripe_subscription_id = NULL WHERE id = ?", school.id);
+      notifyPlatformOwner(`⚠️ ${school.name} ยกเลิกสมาชิกแล้ว`);
     }
   }
 
@@ -138,6 +148,13 @@ r.post('/webhook', wrap(async (req, res) => {
     if (school && obj.period_end) {
       run('UPDATE schools SET plan_expires = ? WHERE id = ?',
         new Date(obj.period_end * 1000).toISOString(), school.id);
+    }
+  }
+
+  if (event.type === 'invoice.payment_failed') {
+    const school = get('SELECT name FROM schools WHERE stripe_customer_id = ?', obj.customer);
+    if (school) {
+      notifyPlatformOwner(`⚠️ ${school.name} การชำระเงินล้มเหลว (invoice ${obj.number || obj.id})`);
     }
   }
 
