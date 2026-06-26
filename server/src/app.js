@@ -25,6 +25,7 @@ import enrollments from './routes/enrollments.js';
 import stripeRoutes from './routes/stripe.js';
 import adminRoutes from './routes/admin.js';
 import richMenu from './routes/richmenu.js';
+import chat from './routes/chat.js';
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
@@ -33,8 +34,11 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 export function createApp() {
   const app = express();
   app.use(cors({ origin: allowedOrigins, credentials: true }));
-  // capture raw body so the LINE webhook can verify its HMAC signature
-  app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
+  // capture raw body so the LINE webhook can verify its HMAC signature.
+  // limit raised from the 100kb default: several endpoints carry base64 images in
+  // the JSON body — Rich Menu artwork (≤1 MB → ~1.34 MB base64) and logo / payment-QR
+  // uploads (validated up to 3 MB → ~4 MB base64). 6 MB covers those with headroom.
+  app.use(express.json({ limit: '6mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
   app.get('/api/health', (req, res) => res.json({ ok: true, service: 'skooldee-api' }));
 
@@ -48,6 +52,8 @@ export function createApp() {
   app.use('/api/public', publicRoutes);
   // Stripe: webhook is public; create-checkout and portal use requireAuth inline
   app.use('/api/stripe', stripeRoutes);
+  // chat: /public is open (landing FAQ); /help applies requireAuth itself (app help)
+  app.use('/api/chat', chat);
 
   // everything below requires a valid JWT and is automatically scoped to the
   // authenticated user's school (req.schoolId) — the multi-tenant boundary.
