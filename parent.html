@@ -410,6 +410,8 @@
     var balance = d.balance_due || 0;
     var invUnpaid = d.invoices_unpaid || [];
     var qrImg = FAM ? FAM.payment_qr_image : null;
+    var paysoLink = FAM ? FAM.payso_link : null;
+    var slipEnabled = FAM ? FAM.slip_enabled !== false : true;
     var childToken = d.token || token; // parent_token scoped to this child
 
     if(balance > 0){
@@ -418,18 +420,24 @@
       html += '<div class="alert-body">';
       html += '<div class="alert-title">มียอดค้างชำระ</div>';
       html += '<div class="alert-amount">'+baht(balance)+'</div>';
-      if(!qrImg) html += '<div class="alert-sub">กรุณาติดต่อโรงเรียนเพื่อชำระค่าเรียน</div>';
+      if(!qrImg && !paysoLink) html += '<div class="alert-sub">กรุณาติดต่อโรงเรียนเพื่อชำระค่าเรียน</div>';
       html += '</div></div>';
     }
 
-    /* ── QR Code payment card (only when school has uploaded one AND there's something to pay) ── */
-    if(balance > 0 && qrImg){
+    /* ── QR Code / Payso payment card (only when school has set one up AND there's something to pay) ── */
+    if(balance > 0 && (qrImg || paysoLink)){
       html += '<div class="qr-card">';
       html += '<div class="qr-title">💳 ชำระค่าเรียน</div>';
-      html += '<div class="qr-sub">สแกน QR Code เพื่อโอนเงิน จากนั้นกด "แนบสลิป"</div>';
-      html += '<img src="'+esc(qrImg)+'" alt="QR Code รับเงิน"/>';
+      if(qrImg){
+        html += '<div class="qr-sub">สแกน QR Code เพื่อโอนเงิน'+(slipEnabled?' จากนั้นกด "แนบสลิป"':' จากนั้นแจ้งโรงเรียนเพื่อยืนยัน')+'</div>';
+        html += '<img src="'+esc(qrImg)+'" alt="QR Code รับเงิน"/>';
+      }
+      if(paysoLink){
+        html += '<a href="'+esc(paysoLink)+'" target="_blank" rel="noopener" class="btn-slip"'
+              + ' style="background:transparent;border:1.5px solid var(--teal);color:var(--teal);text-decoration:none;margin-top:'+(qrImg?'10px':'0')+'">🔗 ชำระผ่าน Payso</a>';
+      }
 
-      if(invUnpaid.length){
+      if(qrImg && invUnpaid.length){
         html += '<div style="margin-top:8px;text-align:left">';
         invUnpaid.forEach(function(inv){
           html += '<div class="inv-row">';
@@ -437,7 +445,7 @@
           html += '<div class="inv-date">ออกบิล '+fmtDate(inv.issued_at)+'</div></div>';
           if(inv.status === 'pending_verification'){
             html += '<span class="slip-sent">✓ ส่งสลิปแล้ว · รอตรวจสอบ</span>';
-          } else {
+          } else if(slipEnabled){
             /* hidden file input + visible button */
             html += '<div>';
             html += '<input type="file" accept="image/*" capture="environment" style="display:none"'
@@ -450,7 +458,7 @@
           html += '</div>';
         });
         html += '</div>';
-      } else {
+      } else if(qrImg){
         html += '<div style="font-size:13px;color:var(--muted);margin-top:8px">โอนเงินแล้วกรุณาแจ้งโรงเรียนเพื่อยืนยัน</div>';
       }
       html += '</div>'; /* /qr-card */

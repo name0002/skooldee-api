@@ -140,13 +140,15 @@ r.get('/student/:token', wrap((req, res) => {
   if (token.length < 8) throw bad('not found', 404);
   const s = get('SELECT * FROM students WHERE parent_token = ?', token);
   if (!s) throw bad('not found', 404);
-  const school = get('SELECT name, slug, contact_phone, logo_image, payment_qr_image FROM schools WHERE id = ?', s.school_id);
+  const school = get('SELECT name, slug, contact_phone, logo_image, payment_qr_image, payso_link, slip_enabled FROM schools WHERE id = ?', s.school_id);
   res.json({
     school: school ? school.name : 'โรงเรียน',
     school_slug: (school && school.slug) || null,
     school_contact_phone: (school && school.contact_phone) || null,
     school_logo: (school && school.logo_image) || null,
     payment_qr_image: (school && school.payment_qr_image) || null,
+    payso_link: (school && school.payso_link) || null,
+    slip_enabled: school ? !!school.slip_enabled : true,
     ...buildStudentPayload(s),
   });
 }));
@@ -164,7 +166,7 @@ r.get('/family/:token', wrap((req, res) => {
   const anchor = get('SELECT * FROM students WHERE parent_token = ?', token);
   if (!anchor) throw bad('not found', 404);
 
-  const school = get('SELECT name, slug, contact_phone, logo_image, payment_qr_image FROM schools WHERE id = ?', anchor.school_id);
+  const school = get('SELECT name, slug, contact_phone, logo_image, payment_qr_image, payso_link, slip_enabled FROM schools WHERE id = ?', anchor.school_id);
 
   let siblings = [anchor];
   if (anchor.line_user_id) {
@@ -185,6 +187,8 @@ r.get('/family/:token', wrap((req, res) => {
     school_contact_phone: (school && school.contact_phone) || null,
     school_logo: (school && school.logo_image) || null,
     payment_qr_image: (school && school.payment_qr_image) || null,
+    payso_link: (school && school.payso_link) || null,
+    slip_enabled: school ? !!school.slip_enabled : true,
     children: siblings.map(buildStudentPayload),
   });
 }));
