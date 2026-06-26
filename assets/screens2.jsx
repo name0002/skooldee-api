@@ -1566,6 +1566,14 @@ ${rowsHtml?`<div style="margin-top:16px;font-weight:700;font-size:13px">${sectio
 
 function TeacherDrawer({ t, onClose, onUpdated, onDeleted }){
   const [editing, setEditing] = useState(false);
+  const [evalOpen, setEvalOpen] = useState(false);
+  const [evalList, setEvalList] = useState(null);
+  const [toast, showToast] = useToast();
+  const reloadEval = React.useCallback(()=>{
+    if(!DATA.listEvaluations) return;
+    Promise.resolve(DATA.listEvaluations(t.id)).then(setEvalList).catch(()=>setEvalList([]));
+  },[t.id]);
+  React.useEffect(()=>{ if(!editing) reloadEval(); },[t.id, editing]);
   if(editing) return <EditTeacherDrawer t={t} onClose={()=>setEditing(false)}
     onSaved={()=>{ setEditing(false); onUpdated&&onUpdated(); }} onDeleted={onDeleted}/>;
   const pay = t.rate*t.hours;
@@ -1596,7 +1604,7 @@ function TeacherDrawer({ t, onClose, onUpdated, onDeleted }){
       </div>
 
       <div className="section-title" style={{ fontSize:15, marginBottom:10 }}>นักเรียนในความดูแล ({myStudents.length})</div>
-      <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+      <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:18 }}>
         {myStudents.map(s=>(
           <div key={s.id} style={{ display:"flex", alignItems:"center", gap:11, padding:"7px 6px" }}>
             <Avatar name={s.name} size={34}/>
@@ -1605,7 +1613,159 @@ function TeacherDrawer({ t, onClose, onUpdated, onDeleted }){
           </div>
         ))}
       </div>
+
+      <div className="section-title" style={{ fontSize:15, marginBottom:10, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <span>📋 ผลการประเมิน</span>
+        <button className="btn btn-sm btn-soft" onClick={()=>setEvalOpen(true)}><Icon n="plus" size={13}/> ประเมิน</button>
+      </div>
+      {(()=>{
+        const list = evalList||[];
+        if(!list.length) return <div style={{ fontSize:13, color:"var(--text-3)" }}>— ยังไม่มีผลประเมิน · กด "ประเมิน" เพื่อบันทึก —</div>;
+        return (
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            {list.map(e=>{
+              const names = Object.keys(e.scores||{});
+              const avg = names.length ? names.reduce((acc,n)=>acc+e.scores[n],0)/names.length : 0;
+              return (
+                <div key={e.id} className="card" style={{ padding:"12px 15px" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                    <div style={{ fontWeight:700, fontSize:14 }}>{e.template_name||"แบบประเมิน"}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <Stars value={Math.round(avg)} size={14}/>
+                      <span style={{ fontSize:12.5, color:"var(--text-3)" }}>{e.date}</span>
+                      <button className="icon-btn" style={{ width:26, height:26, border:0, color:"var(--text-3)" }} title="ลบผลประเมินนี้"
+                        onClick={async()=>{ if(confirm("ลบผลประเมินนี้?")){ try{ await DATA.deleteEvaluation(t.id, e.id); reloadEval(); showToast("ลบแล้ว"); }catch(ex){ showToast("ลบไม่สำเร็จ","error"); } } }}>
+                        <Icon n="x" size={12}/>
+                      </button>
+                    </div>
+                  </div>
+                  {names.map(n=>(
+                    <div key={n} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"3px 0", fontSize:13 }}>
+                      <span style={{ color:"var(--text-2)" }}>{n}</span>
+                      <Stars value={e.scores[n]} size={13}/>
+                    </div>
+                  ))}
+                  {e.evaluator && <div style={{ fontSize:12, color:"var(--text-3)", marginTop:6 }}>ผู้ประเมิน: {e.evaluator}</div>}
+                  {e.comments && <div style={{ fontSize:12.5, color:"var(--text-3)", marginTop:4, fontStyle:"italic" }}>📝 {e.comments}</div>}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {evalOpen && <EvaluateModal teacher={t} onClose={()=>setEvalOpen(false)}
+        onDone={(rec, err)=>{
+          setEvalOpen(false);
+          if(err){ showToast(err||"บันทึกไม่สำเร็จ ❌","error"); return; }
+          reloadEval();
+          showToast("บันทึกผลประเมินแล้ว ✓");
+        }}/>}
+      {toast}
     </Drawer>
+  );
+}
+
+/* ===================== STAFF EVALUATION (uses templates from settings) ===================== */
+function EvaluateModal({ teacher, onClose, onDone }){
+  const [templates, setTemplates] = useState(null);
+  const [templateId, setTemplateId] = useState(null);
+  const [scores, setScores] = useState({});
+  const [comments, setComments] = useState("");
+  const [date, setDate] = useState(()=> new Date().toISOString().slice(0,10));
+  const [busy, setBusy] = useState(false);
+  useEffect(()=>{ const h=(e)=>e.key==="Escape"&&onClose(); window.addEventListener("keydown",h); return ()=>window.removeEventListener("keydown",h); },[]);
+  useEffect(()=>{
+    if(!DATA.evalTemplates){ setTemplates([]); return; }
+    Promise.resolve(DATA.evalTemplates()).then(list=>{
+      const arr = list||[];
+      setTemplates(arr);
+      if(arr.length) setTemplateId(arr[0].id);
+    }).catch(()=>setTemplates([]));
+  },[]);
+
+  const tpl = (templates||[]).find(x=>x.id===templateId);
+  const criteria = tpl ? tpl.criteria : [];
+  const setScore = (name,v)=> setScores(p=>({ ...p, [name]:v }));
+  const pickTpl = (id)=>{ setTemplateId(id); setScores({}); };
+
+  const submit = async ()=>{
+    if(!tpl) return;
+    const clean = {};
+    criteria.forEach(c=>{ const v=scores[c]; if(v>=1&&v<=5) clean[c]=v; });
+    if(!Object.keys(clean).length) return;
+    setBusy(true);
+    try{
+      const rec = await DATA.submitEvaluation(teacher.id, tpl.id, { date, scores:clean, comments: comments.trim()||null });
+      onDone(rec);
+    }catch(ex){ onDone(null, ex&&ex.message); }
+    setBusy(false);
+  };
+
+  return (
+    <>
+      <div className="scrim" onClick={onClose}></div>
+      <div className="modal">
+        <div className="modal-head">
+          <div style={{ width:4, height:34, borderRadius:4, background:"var(--primary)" }}></div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontFamily:"var(--ff-display)", fontWeight:700, fontSize:16 }}>📋 ประเมินบุคลากร</div>
+            <div style={{ fontSize:12.5, color:"var(--text-3)" }}>{teacher.nick}</div>
+          </div>
+          <button className="icon-btn" onClick={onClose}><Icon n="x" size={18}/></button>
+        </div>
+        <div className="modal-body" style={{ background:"var(--surface)" }}>
+          {templates===null && <div style={{ fontSize:13, color:"var(--text-3)" }}>กำลังโหลดแบบประเมิน…</div>}
+          {templates && !templates.length && (
+            <div style={{ fontSize:13.5, color:"var(--text-3)", textAlign:"center", padding:"20px 0" }}>
+              ยังไม่มีแบบประเมิน — สร้างได้ที่ ตั้งค่า → ประเมินบุคลากร
+            </div>
+          )}
+          {templates && templates.length>0 && (
+            <>
+              {templates.length>1 && (
+                <div className="field">
+                  <label>แบบประเมิน</label>
+                  <div className="tag-filter" style={{ flexWrap:"wrap" }}>
+                    {templates.map(x=>(
+                      <button key={x.id} className={"chip"+(templateId===x.id?" active":"")} onClick={()=>pickTpl(x.id)}>{x.name}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="field">
+                <label>เกณฑ์ประเมิน <span style={{ fontSize:11, color:"var(--text-3)" }}>· {tpl?tpl.name:""}</span></label>
+                <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                  {criteria.map(name=>(
+                    <div key={name} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 2px", borderBottom:"1px solid var(--border)" }}>
+                      <span style={{ fontSize:14 }}>{name}</span>
+                      <StarInput value={scores[name]||0} onChange={v=>setScore(name,v)}/>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize:11.5, color:"var(--text-3)", marginTop:6 }}>แตะดาวเพื่อให้คะแนน · แตะดาวเดิมซ้ำเพื่อล้าง</div>
+              </div>
+
+              <div className="field"><label>วันที่ประเมิน</label>
+                <input type="date" value={date} onChange={e=>setDate(e.target.value)}
+                  style={{ width:"100%", padding:"9px 12px", borderRadius:8, border:"1.5px solid var(--border)", fontSize:14, boxSizing:"border-box" }}/>
+              </div>
+              <div className="field"><label>ความเห็นเพิ่มเติม <span style={{ fontSize:11, color:"var(--text-3)" }}>ไม่บังคับ</span></label>
+                <textarea rows={2} value={comments} onChange={e=>setComments(e.target.value)} placeholder="เช่น สอนดี ตรงเวลา ควรพัฒนาการสื่อสารกับผู้ปกครอง"
+                  style={{ width:"100%", padding:"9px 12px", borderRadius:8, border:"1.5px solid var(--border)", fontSize:14, boxSizing:"border-box", fontFamily:"inherit" }}/>
+              </div>
+            </>
+          )}
+        </div>
+        <div className="modal-foot">
+          <button className="btn btn-ghost" style={{ flex:1 }} onClick={onClose}>ยกเลิก</button>
+          <button className="btn btn-primary" style={{ flex:1.4 }} onClick={submit} disabled={busy||!tpl||!criteria.length}>
+            <Icon n="check" size={17}/> {busy?"กำลังบันทึก…":"บันทึกผลประเมิน"}
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 /* ===================== ADD TEACHER DRAWER ===================== */

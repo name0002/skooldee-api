@@ -27,6 +27,7 @@ function Settings({ go }){
         {tab('school',     '🏫 ข้อมูลโรงเรียน')}
         {tab('categories', '🎨 ประเภทวิชา')}
         {tab('assess',     '📊 เกณฑ์ประเมิน')}
+        {tab('staffeval',  '📋 ประเมินบุคลากร')}
         {tab('rooms',      '🚪 ห้องเรียน')}
         {tab('payment',    '💳 ชำระเงิน')}
         {tab('staff',      '👥 บัญชีพนักงาน')}
@@ -38,6 +39,7 @@ function Settings({ go }){
       {section==='school'      && <SchoolSettingsSection showToast={showToast}/>}
       {section==='categories'  && <CategoriesSettingsSection showToast={showToast}/>}
       {section==='assess'      && <AssessmentSettingsSection showToast={showToast}/>}
+      {section==='staffeval'   && <StaffEvalSettingsSection showToast={showToast}/>}
       {section==='rooms'       && <RoomsSettingsSection showToast={showToast}/>}
       {section==='payment'     && <PaymentSettingsSection showToast={showToast}/>}
       {section==='staff'       && <StaffSettingsSection showToast={showToast}/>}
@@ -362,13 +364,45 @@ function compressQrImage(file){
 function PaymentSettingsSection({ showToast }){
   useDataVersion();
   const [qrImg, setQrImg] = useState(()=> DATA._schoolRaw ? (DATA._schoolRaw.payment_qr_image||null) : null);
+  const [slipEnabled, setSlipEnabled] = useState(()=> DATA._schoolRaw ? (DATA._schoolRaw.slip_enabled!==false) : true);
+  const [paysoLink, setPaysoLink] = useState(()=> DATA._schoolRaw ? (DATA._schoolRaw.payso_link||'') : '');
+  const [paysoBusy, setPaysoBusy] = useState(false);
   const [busy, setBusy] = useState(false);
+  const inp = useInpStyle();
   const syncedRef = React.useRef(null);
   const schoolId = (DATA._schoolRaw||{}).id;
   if(schoolId && schoolId !== syncedRef.current){
     syncedRef.current = schoolId;
     setQrImg((DATA._schoolRaw||{}).payment_qr_image||null);
+    setSlipEnabled((DATA._schoolRaw||{}).slip_enabled!==false);
+    setPaysoLink((DATA._schoolRaw||{}).payso_link||'');
   }
+
+  const toggleSlip = async(checked)=>{
+    setSlipEnabled(checked);
+    try{
+      if(DATA._isLiveMode && window.API){
+        await window.API.updateSchool({ slip_enabled: checked });
+        if(DATA._schoolRaw) DATA._schoolRaw.slip_enabled = checked;
+        showToast(checked?'เปิดให้แนบสลิปแล้ว ✓':'ปิดการแนบสลิปแล้ว — ผู้ปกครองต้องแจ้งโรงเรียนเองหลังโอน');
+      }
+    }catch(ex){ setSlipEnabled(!checked); showToast('บันทึกไม่สำเร็จ','error'); }
+  };
+
+  const savePayso = async()=>{
+    setPaysoBusy(true);
+    try{
+      const v = paysoLink.trim();
+      if(DATA._isLiveMode && window.API){
+        await window.API.updateSchool({ payso_link: v });
+        if(DATA._schoolRaw) DATA._schoolRaw.payso_link = v||null;
+        showToast(v?'บันทึกลิงก์ Payso แล้ว ✓':'ลบลิงก์ Payso แล้ว');
+      } else {
+        showToast('ใช้ได้เฉพาะ Live mode','error');
+      }
+    }catch(ex){ showToast(ex.message||'บันทึกไม่สำเร็จ','error'); }
+    setPaysoBusy(false);
+  };
 
   const onQrFile = async(e)=>{
     const file = e.target.files && e.target.files[0]; if(!file) return;
@@ -439,6 +473,26 @@ function PaymentSettingsSection({ showToast }){
             </div>
           </div>
         )}
+        {qrImg && (
+          <label style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', marginTop:18, paddingTop:18, borderTop:'1px solid var(--border)' }}>
+            <input type="checkbox" checked={slipEnabled} onChange={e=>toggleSlip(e.target.checked)}
+              style={{ width:20, height:20, accentColor:'var(--primary)' }}/>
+            <div>
+              <div style={{ fontWeight:600, fontSize:14 }}>เปิดให้ผู้ปกครองแนบสลิป</div>
+              <div style={{ fontSize:12.5, color:'var(--text-3)' }}>
+                {slipEnabled ? 'เปิด — ผู้ปกครองกดแนบสลิปได้ทันทีในพอร์ทัล' : 'ปิด — แสดง QR แต่ผู้ปกครองต้องแจ้งโรงเรียนเองหลังโอน (เช่น ทาง LINE)'}
+              </div>
+            </div>
+          </label>
+        )}
+      </SettingsCard>
+
+      <SettingsCard title="Payso" sub="หากโรงเรียนสมัครใช้ Payso แล้ว ใส่ลิงก์ชำระเงินที่นี่ — ผู้ปกครองจะเห็นปุ่ม “ชำระผ่าน Payso” ในพอร์ทัล">
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          <input value={paysoLink} onChange={e=>setPaysoLink(e.target.value)} placeholder="https://payso.io/your-link"
+            style={{ ...inp, flex:1, minWidth:220 }} disabled={paysoBusy}/>
+          <button className="btn btn-primary" onClick={savePayso} disabled={paysoBusy}>{paysoBusy?'กำลังบันทึก…':'บันทึก'}</button>
+        </div>
       </SettingsCard>
     </div>
   );
@@ -874,6 +928,119 @@ function AssessmentSettingsSection({ showToast }){
         )}
       </SettingsCard>
     </>
+  );
+}
+
+/* ===================== Staff evaluation templates (forms + criteria rubric) ===================== */
+function StaffEvalSettingsSection({ showToast }){
+  const inp = useInpStyle();
+  const [templates, setTemplates] = useState(null);   // null = loading
+  const [draft, setDraft] = useState({});             // per-template "add criterion" input text
+  const [busy, setBusy] = useState({});                // per-template id -> saving bool
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+
+  const reload = React.useCallback(()=>{
+    if(!DATA.evalTemplates){ setTemplates([]); return; }
+    Promise.resolve(DATA.evalTemplates()).then(list=>setTemplates(list||[])).catch(()=>setTemplates([]));
+  },[]);
+  React.useEffect(()=>{ reload(); },[]);
+
+  const createTemplate = async()=>{
+    const name = newName.trim().slice(0,100);
+    if(!name) return;
+    try{
+      await DATA.addEvalTemplate({ name, criteria:[] });
+      setNewName(''); setCreating(false); reload();
+      showToast('เพิ่มแบบประเมินแล้ว ✓');
+    }catch(ex){ showToast(ex.message||'เกิดข้อผิดพลาด','error'); }
+  };
+
+  const updateLocal = (id, patch)=> setTemplates(ts=>ts.map(t=> t.id===id ? { ...t, ...patch } : t));
+
+  const addCrit = (tpl)=>{
+    const name = (draft[tpl.id]||'').trim().slice(0,60);
+    if(!name) return;
+    if((tpl.criteria||[]).includes(name)){ setDraft(p=>({ ...p, [tpl.id]:'' })); return; }
+    if((tpl.criteria||[]).length>=20){ showToast('ได้สูงสุด 20 เกณฑ์ต่อแบบประเมิน','error'); return; }
+    updateLocal(tpl.id, { criteria:[...(tpl.criteria||[]), name] });
+    setDraft(p=>({ ...p, [tpl.id]:'' }));
+  };
+  const removeCrit = (tpl, idx)=> updateLocal(tpl.id, { criteria:(tpl.criteria||[]).filter((_,i)=>i!==idx) });
+
+  const saveTemplate = async(tpl)=>{
+    setBusy(p=>({ ...p, [tpl.id]:true }));
+    try{
+      await DATA.patchEvalTemplate(tpl.id, { name: tpl.name, criteria: tpl.criteria||[] });
+      showToast('บันทึกแบบประเมินแล้ว ✓');
+    }catch(ex){ showToast(ex.message||'บันทึกไม่สำเร็จ','error'); }
+    setBusy(p=>({ ...p, [tpl.id]:false }));
+  };
+
+  const deleteTemplate = async(tpl)=>{
+    if(!confirm(`ลบแบบประเมิน "${tpl.name}"? ผลประเมินที่บันทึกไว้ก่อนหน้าจะยังเก็บไว้`)) return;
+    try{
+      await DATA.deleteEvalTemplate(tpl.id);
+      setTemplates(ts=>ts.filter(t=>t.id!==tpl.id));
+      showToast('ลบแบบประเมินแล้ว');
+    }catch(ex){ showToast(ex.message||'ลบไม่สำเร็จ','error'); }
+  };
+
+  return (
+    <SettingsCard title="แบบประเมินบุคลากร" sub="สร้างฟอร์มประเมินครู/พนักงาน กำหนดเกณฑ์เอง — ให้คะแนนดาว 1–5 ต่อเกณฑ์เวลาประเมิน">
+      {templates===null && <div style={{ padding:20, textAlign:'center', color:'var(--text-3)', fontSize:13.5 }}>กำลังโหลด…</div>}
+      {templates && !templates.length && !creating && (
+        <div style={{ padding:20, textAlign:'center', color:'var(--text-3)', fontSize:13.5 }}>ยังไม่มีแบบประเมิน — สร้างแบบแรกได้เลย</div>
+      )}
+      {templates && templates.length>0 && (
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          {templates.map(tpl=>(
+            <div key={tpl.id} style={{ padding:'14px', background:'var(--surface-2)', borderRadius:10 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                <input value={tpl.name} onChange={e=>updateLocal(tpl.id,{ name:e.target.value })}
+                  style={{ ...inp, flex:1, fontWeight:700, padding:'7px 11px' }}/>
+                <button className="icon-btn" style={{ width:30, height:30, border:0, color:'var(--text-3)' }} title="ลบแบบประเมิน"
+                  onClick={()=>deleteTemplate(tpl)}><Icon n="x" size={14}/></button>
+              </div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:10 }}>
+                {(tpl.criteria||[]).map((name,idx)=>(
+                  <span key={idx} style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'5px 10px', borderRadius:20, background:'var(--surface)', border:'1.5px solid var(--border)', fontSize:13 }}>
+                    {name}
+                    <span onClick={()=>removeCrit(tpl,idx)} style={{ cursor:'pointer', color:'var(--text-3)', fontWeight:700 }}>×</span>
+                  </span>
+                ))}
+                {!(tpl.criteria||[]).length && <span style={{ fontSize:12.5, color:'var(--text-3)' }}>ยังไม่มีเกณฑ์</span>}
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <input value={draft[tpl.id]||''} onChange={e=>setDraft(p=>({ ...p, [tpl.id]:e.target.value }))}
+                  onKeyDown={e=>e.key==='Enter'&&addCrit(tpl)} placeholder="เพิ่มเกณฑ์ใหม่ เช่น ความตรงต่อเวลา"
+                  style={{ ...inp, flex:1, padding:'7px 11px' }}/>
+                <button className="btn" style={{ padding:'7px 14px', fontSize:13 }} onClick={()=>addCrit(tpl)}>+ เพิ่ม</button>
+              </div>
+              <div style={{ marginTop:12 }}>
+                <button className="btn btn-primary" style={{ fontSize:13 }} disabled={busy[tpl.id]} onClick={()=>saveTemplate(tpl)}>
+                  <Icon n="check" size={14}/> {busy[tpl.id]?'กำลังบันทึก…':'บันทึก'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ marginTop:18, paddingTop:18, borderTop: (templates&&templates.length) ? '1px solid var(--border)' : 'none' }}>
+        {!creating ? (
+          <button className="btn" onClick={()=>setCreating(true)}><Icon n="plus" size={16}/> เพิ่มแบบประเมินใหม่</button>
+        ) : (
+          <div style={{ display:'flex', gap:8 }}>
+            <input autoFocus value={newName} onChange={e=>setNewName(e.target.value)}
+              onKeyDown={e=>e.key==='Enter'&&createTemplate()} placeholder="ชื่อแบบประเมิน เช่น ประเมินครูประจำเดือน"
+              style={{ ...inp, flex:1, padding:'9px 12px' }}/>
+            <button className="btn btn-primary" onClick={createTemplate} disabled={!newName.trim()}>สร้าง</button>
+            <button className="btn btn-ghost" onClick={()=>{ setCreating(false); setNewName(''); }}>ยกเลิก</button>
+          </div>
+        )}
+      </div>
+    </SettingsCard>
   );
 }
 

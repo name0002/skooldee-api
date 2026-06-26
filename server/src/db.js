@@ -292,6 +292,31 @@ CREATE TABLE IF NOT EXISTS bookings (
 );
 CREATE INDEX IF NOT EXISTS idx_bookings_session ON bookings(session_id, status);
 CREATE INDEX IF NOT EXISTS idx_bookings_school ON bookings(school_id, status);
+
+-- Staff (teacher) evaluation: a school defines reusable rubrics (criteria, 1-5 stars
+-- each, same shape as the student-assessment rubric) then an owner/supervisor scores
+-- a teacher against one of those templates on a given date.
+CREATE TABLE IF NOT EXISTS evaluation_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  criteria_json TEXT NOT NULL,                   -- ["เกณฑ์1","เกณฑ์2",...]
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_eval_templates_school ON evaluation_templates(school_id);
+
+CREATE TABLE IF NOT EXISTS evaluations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+  template_id INTEGER REFERENCES evaluation_templates(id) ON DELETE SET NULL,
+  teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  evaluator_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  date TEXT NOT NULL,                            -- YYYY-MM-DD (evaluation period)
+  scores_json TEXT,                              -- { criterion: 1..5 }
+  comments TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_evaluations_teacher ON evaluations(school_id, teacher_id);
 `;
 
 export function initSchema() {

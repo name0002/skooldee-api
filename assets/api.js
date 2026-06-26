@@ -79,6 +79,13 @@
     assessments:    function (sid) { return req('/api/assessments?student_id=' + sid); },              // development-score history
     addAssessment:  function (d)   { return req('/api/assessments', { method: 'POST', body: JSON.stringify(d) }); },
     deleteAssessment: function (id){ return req('/api/assessments/' + id, { method: 'DELETE' }); },
+    evalTemplates:    function ()    { return req('/api/staff-evaluations/templates'); },                  // staff-evaluation rubrics
+    addEvalTemplate:  function (d)   { return req('/api/staff-evaluations/templates', { method: 'POST', body: JSON.stringify(d) }); },
+    patchEvalTemplate:function (id,d){ return req('/api/staff-evaluations/templates/' + id, { method: 'PATCH', body: JSON.stringify(d) }); },
+    deleteEvalTemplate:function (id) { return req('/api/staff-evaluations/templates/' + id, { method: 'DELETE' }); },
+    submitEvaluation: function (templateId, d) { return req('/api/staff-evaluations/templates/' + templateId + '/submit', { method: 'POST', body: JSON.stringify(d) }); },
+    staffEvaluations: function (teacherId) { return req('/api/staff-evaluations?teacher_id=' + teacherId); }, // evaluation history for one teacher
+    deleteEvaluation: function (id)  { return req('/api/staff-evaluations/' + id, { method: 'DELETE' }); },
 
     /* ---- Write ---- */
     createStudent:  function (d)     { return req('/api/students',                   { method: 'POST',   body: JSON.stringify(d) }); },

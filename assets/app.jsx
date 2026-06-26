@@ -550,6 +550,23 @@ function AuthRoot(){
         return window.API.addAssessment({ student_id: stu._dbId, ...payload });
       };
       DATA.deleteAssessment = function(_studentId, id){ return window.API.deleteAssessment(id); };
+
+      /* -- staff (teacher) evaluations → /api/staff-evaluations. templates are school-wide;
+            evaluation records are keyed by the teacher's FRONTEND id, resolved to _dbId here -- */
+      DATA.evalTemplates = function(){ return window.API.evalTemplates(); };
+      DATA.addEvalTemplate = function(payload){ return window.API.addEvalTemplate(payload); };
+      DATA.patchEvalTemplate = function(id, payload){ return window.API.patchEvalTemplate(id, payload); };
+      DATA.deleteEvalTemplate = function(id){ return window.API.deleteEvalTemplate(id); };
+      DATA.listEvaluations = function(teacherId){
+        const t = DATA.TEACHERS.find(function(x){ return x.id===teacherId; });
+        return t && t._dbId ? window.API.staffEvaluations(t._dbId) : Promise.resolve([]);
+      };
+      DATA.submitEvaluation = function(teacherId, templateId, payload){
+        const t = DATA.TEACHERS.find(function(x){ return x.id===teacherId; });
+        if(!t) return Promise.resolve(null);
+        return window.API.submitEvaluation(templateId, { teacher_id: t._dbId, ...payload });
+      };
+      DATA.deleteEvaluation = function(_teacherId, id){ return window.API.deleteEvaluation(id); };
       /* -- save rubric / parent-visibility via PATCH /api/schools -- */
       DATA.saveCriteria = async function(critObj){
         await DATA.updateSchool({ assessment_criteria_json: critObj });

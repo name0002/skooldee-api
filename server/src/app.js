@@ -20,6 +20,7 @@ import line from './routes/line.js';
 import publicRoutes from './routes/public.js';
 import users from './routes/users.js';
 import assessments from './routes/assessments.js';
+import staffEvaluations from './routes/staffEvaluations.js';
 import enrollments from './routes/enrollments.js';
 import stripeRoutes from './routes/stripe.js';
 import adminRoutes from './routes/admin.js';
@@ -61,6 +62,7 @@ export function createApp() {
   app.use('/api/homework', homework);
   app.use('/api/points', points);
   app.use('/api/assessments', assessments);
+  app.use('/api/staff-evaluations', staffEvaluations);
   app.use('/api/referrals', referrals);
   app.use('/api/dashboard', dashboard);
   app.use('/api/notify', notify);

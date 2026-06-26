@@ -366,11 +366,48 @@ function deleteAssessment(studentId, id){
   __persistAssess(); return Promise.resolve({ ok:true });
 }
 
+/* demo-mode staff evaluations — kept in localStorage, mirror live API shapes */
+let __EVAL_TEMPLATES = (()=>{ try{ return JSON.parse(localStorage.getItem(PFX+"evalTemplates")||"[]"); }catch(e){ return []; } })();
+let __EVALS = (()=>{ try{ return JSON.parse(localStorage.getItem(PFX+"evals")||"{}"); }catch(e){ return {}; } })();
+function __persistEvalTemplates(){ try{ localStorage.setItem(PFX+"evalTemplates", JSON.stringify(__EVAL_TEMPLATES)); }catch(e){} }
+function __persistEvals(){ try{ localStorage.setItem(PFX+"evals", JSON.stringify(__EVALS)); }catch(e){} }
+function evalTemplates(){ return Promise.resolve(__EVAL_TEMPLATES.slice()); }
+function addEvalTemplate(payload){
+  const tpl = { id:'tpl'+Date.now(), name:payload.name, criteria:(payload.criteria||[]).filter(Boolean), created_at:new Date().toISOString() };
+  __EVAL_TEMPLATES.unshift(tpl); __persistEvalTemplates();
+  return Promise.resolve(tpl);
+}
+function patchEvalTemplate(id, payload){
+  const tpl = __EVAL_TEMPLATES.find(t=>t.id===id); if(!tpl) return Promise.resolve(null);
+  if('name' in payload) tpl.name = payload.name;
+  if('criteria' in payload) tpl.criteria = (payload.criteria||[]).filter(Boolean);
+  __persistEvalTemplates(); return Promise.resolve(tpl);
+}
+function deleteEvalTemplate(id){
+  __EVAL_TEMPLATES = __EVAL_TEMPLATES.filter(t=>t.id!==id); __persistEvalTemplates();
+  return Promise.resolve({ ok:true });
+}
+function listEvaluations(teacherId){
+  return Promise.resolve(((__EVALS[teacherId]||[]).slice()).sort((a,b)=> a.date<b.date?1:-1));
+}
+function submitEvaluation(teacherId, templateId, payload){
+  const tpl = __EVAL_TEMPLATES.find(t=>t.id===templateId);
+  const rec = { id:'ev'+Date.now(), template_id:templateId, template_name:tpl?tpl.name:null,
+    date:payload.date, scores:payload.scores||{}, comments:payload.comments||null, created_at:new Date().toISOString() };
+  (__EVALS[teacherId] = __EVALS[teacherId]||[]).unshift(rec); __persistEvals();
+  return Promise.resolve(rec);
+}
+function deleteEvaluation(teacherId, id){
+  if(__EVALS[teacherId]) __EVALS[teacherId] = __EVALS[teacherId].filter(e=>e.id!==id);
+  __persistEvals(); return Promise.resolve({ ok:true });
+}
+
 window.DATA = { SCHOOL, CATS, TEACHERS, TEACHER_BY_CAT, COURSES, STUDENTS, STATUS, DAYS, SCHEDULE, layoutDay,
   DAY_START, DAY_END, PX_PER_MIN, toMin, SLOT_TIMES, TODAY, INVOICES, PAY_STATUS, REVENUE, baht,
   PACKAGES_DEFAULT, loadPackages, savePackagePrice, NEAR_LIMIT, isNearEnding, nearEndingInfo, lineResultMsg, recipientWords, RECIPIENT_TYPES,
   updateStudent, findStudent, TODAY_KEY, TODAY_LABEL, ATT_STATUS, loadAttendance, saveAttendance,
   TIERS, tierOf, givePoints, ASSESS_CRITERIA:{}, SHOW_ASSESS_PARENTS:false, SHOW_COURSE_NO_PARENTS:false, PAYMENT_QR_IMAGE:null, SCHOOL_LOGO:null, ENROLLMENTS:[],
   listAssessments, addAssessment, deleteAssessment, NOW_KEY, HW_STATUS, HOMEWORK, addHomework, updateHomework, isOverdue, setNearLimit,
+  evalTemplates, addEvalTemplate, patchEvalTemplate, deleteEvalTemplate, listEvaluations, submitEvaluation, deleteEvaluation,
   REF_REWARD, REF_FRIEND_BONUS, refCode, REF_STATUS, REFERRALS, addReferral, setReferralStatus, refStats,
   NAME_DISPLAY, setNameDisplay, dispName, PIPELINE_STAGES };
