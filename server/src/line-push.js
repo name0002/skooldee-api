@@ -89,3 +89,20 @@ export async function maybeNotifyTeacher(schoolId, teacherId, eventKey, text) {
     await pushRaw(school.line_token, t.line_user_id, text);
   } catch { /* swallow */ }
 }
+
+/**
+ * Platform-wide push to the skooldee owner (not a tenant school) — business events
+ * like a new school signing up, a plan change, trial expiry, or a failed payment.
+ * Not plan-gated (this is platform infra, not a tenant feature). Reuses whichever
+ * school row has been linked as the owner's notification channel (owner_line_id +
+ * that same school's own line_token). Never throws — must not block the caller.
+ */
+export async function notifyPlatformOwner(text) {
+  try {
+    const row = get(`SELECT line_token, owner_line_id FROM schools
+                      WHERE owner_line_id IS NOT NULL AND owner_line_id != ''
+                        AND line_token IS NOT NULL AND line_token != '' LIMIT 1`);
+    if (!row) return;
+    await pushRaw(row.line_token, row.owner_line_id, text);
+  } catch { /* swallow — must never break the caller's main flow */ }
+}

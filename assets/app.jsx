@@ -293,6 +293,7 @@ function AuthRoot(){
       /* -- store raw school & user for Settings screen -- */
       DATA._schoolRaw = { ...school };
       DATA._userRaw   = { ...user };
+      DATA._isPlatformAdmin = !!(user && user.is_platform_admin);
       // effective access control (resolved server-side): { scope, pages:{ pageId: none|view|manage } }
       DATA._perms = (user && user.permissions && typeof user.permissions==='object')
         ? user.permissions
@@ -818,6 +819,7 @@ function AuthRoot(){
           DATA._userRaw.name = patch.name;
           DATA.SCHOOL.owner = patch.name;
         }
+        if('phone' in patch) DATA._userRaw.phone = patch.phone || null;
         bumpData();
       };
 
@@ -872,6 +874,7 @@ const NAV = [
   { id:"referrals", label:"แนะนำเพื่อน",   m:"แนะนำ", icon:"gift" },
   { id:"reports",   label:"รายงาน",       m:"รายงาน", icon:"chart" },
   { id:"settings",  label:"ตั้งค่า",       m:"ตั้งค่า", icon:"settings" },
+  { id:"superadmin",label:"Platform",      m:"Platform", icon:"chart", _adminOnly:true },
 ];
 // Page access is driven by the logged-in user's resolved permissions (DATA._perms).
 // 'settings' stays owner/admin only (staff & permission management is sensitive).
@@ -885,6 +888,7 @@ function pageLevel(pageId){
 }
 function canAccess(pageId, role){
   if(pageId==='settings') return role==='owner' || role==='admin';
+  if(pageId==='superadmin') return !!(DATA._isPlatformAdmin);
   return PERM_LEVELS[pageLevel(pageId)] >= 1;
 }
 // default to full access until a live login resolves real perms (covers demo mode too)
@@ -892,16 +896,17 @@ if(!DATA._perms) DATA._perms = { scope:'all', pages:{} };
 // component-level helper: may the current user MANAGE (write) this page?
 DATA.can = function(pageId, level){ return PERM_LEVELS[pageLevel(pageId)] >= PERM_LEVELS[level||'view']; };
 const TITLES = {
-  dashboard:{ t:"ภาพรวม", s:"สรุปกิจกรรมโรงเรียนวันนี้" },
-  schedule: { t:"ตารางเรียน", s:"จองและจัดการคาบเรียนรายสัปดาห์" },
-  attendance:{ t:"เช็คชื่อเข้าเรียน", s:"บันทึกการเข้าเรียนรายวัน" },
-  homework: { t:"การบ้าน", s:"มอบหมายและแจ้งการบ้านผ่าน LINE" },
-  students: { t:"นักเรียน", s:"ข้อมูลนักเรียนและความคืบหน้า" },
-  teachers: { t:"ครูผู้สอน", s:"ครูและการคำนวณค่าสอน" },
-  finance:  { t:"การเงิน & คอร์ส", s:"ใบเสร็จ การชำระเงิน และแพ็กเกจ" },
-  referrals:{ t:"แนะนำเพื่อน", s:"ระบบแนะนำเพื่อนรับแต้มสะสม" },
-  reports:  { t:"รายงานสรุป", s:"ภาพรวมผลการดำเนินงานรายเดือน" },
-  settings: { t:"ตั้งค่า", s:"ข้อมูลโรงเรียนและบัญชีผู้ใช้" },
+  dashboard:  { t:"ภาพรวม", s:"สรุปกิจกรรมโรงเรียนวันนี้" },
+  schedule:   { t:"ตารางเรียน", s:"จองและจัดการคาบเรียนรายสัปดาห์" },
+  attendance: { t:"เช็คชื่อเข้าเรียน", s:"บันทึกการเข้าเรียนรายวัน" },
+  homework:   { t:"การบ้าน", s:"มอบหมายและแจ้งการบ้านผ่าน LINE" },
+  students:   { t:"นักเรียน", s:"ข้อมูลนักเรียนและความคืบหน้า" },
+  teachers:   { t:"ครูผู้สอน", s:"ครูและการคำนวณค่าสอน" },
+  finance:    { t:"การเงิน & คอร์ส", s:"ใบเสร็จ การชำระเงิน และแพ็กเกจ" },
+  referrals:  { t:"แนะนำเพื่อน", s:"ระบบแนะนำเพื่อนรับแต้มสะสม" },
+  reports:    { t:"รายงานสรุป", s:"ภาพรวมผลการดำเนินงานรายเดือน" },
+  settings:   { t:"ตั้งค่า", s:"ข้อมูลโรงเรียนและบัญชีผู้ใช้" },
+  superadmin: { t:"Platform Dashboard", s:"ภาพรวมโรงเรียนทั้งหมดบน skooldee" },
 };
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
@@ -1040,8 +1045,9 @@ function App({ liveLogout }){
 
   const role = (DATA._userRaw && DATA._userRaw.role) || 'owner';
   const visibleNav = NAV.filter(n=>canAccess(n.id, role));
+  const mobNav = visibleNav.filter(n=>!n._adminOnly);
   const allowed = canAccess(page, role);
-  const Screen = { dashboard:Dashboard, schedule:Schedule, attendance:Attendance, homework:Homework, students:Students, teachers:Teachers, finance:Finance, referrals:Referrals, reports:Reports, settings:Settings }[page];
+  const Screen = { dashboard:Dashboard, schedule:Schedule, attendance:Attendance, homework:Homework, students:Students, teachers:Teachers, finance:Finance, referrals:Referrals, reports:Reports, settings:Settings, superadmin:SuperAdmin }[page];
   const ti = TITLES[page];
 
   return (
@@ -1057,12 +1063,15 @@ function App({ liveLogout }){
         </div>
 
         <div className="nav-section">เมนูหลัก</div>
-        {visibleNav.map(n=>(
-          <button key={n.id} className={"nav-item"+(page===n.id?" active":"")} onClick={()=>go(n.id)}>
-            <Icon n={n.icon} size={20}/>
-            <span>{n.label}</span>
-            {n.badge && <span className="nav-badge">{n.badge}</span>}
-          </button>
+        {visibleNav.map((n,i)=>(
+          <React.Fragment key={n.id}>
+            {n._adminOnly && <div style={{ height:1, background:'var(--border)', margin:'8px 0 6px', opacity:.6 }}/>}
+            <button className={"nav-item"+(page===n.id?" active":"")} onClick={()=>go(n.id)}>
+              <Icon n={n.icon} size={20}/>
+              <span>{n.label}</span>
+              {n.badge && <span className="nav-badge">{n.badge}</span>}
+            </button>
+          </React.Fragment>
         ))}
 
         <div className="side-foot">
@@ -1159,7 +1168,7 @@ function App({ liveLogout }){
 
       {/* ---- mobile bottom nav ---- */}
       <nav className="mobnav">
-        {visibleNav.map(n=>(
+        {mobNav.map(n=>(
           <button key={n.id} className={page===n.id?"active":""} onClick={()=>go(n.id)}>
             <Icon n={n.icon} size={20}/>
             <span>{n.m}</span>

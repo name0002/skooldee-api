@@ -371,6 +371,11 @@ export function initSchema() {
   // parents on the portal so they can scan-to-pay and then upload a slip.
   addCol('ALTER TABLE schools ADD COLUMN payment_qr_image TEXT');
   addCol('ALTER TABLE schools ADD COLUMN logo_image TEXT');
+  // platform-owner LINE notifications (new signups, plan changes, trial expiry, payment failures).
+  // Stored on whichever school row the platform admin links — that school's own LINE
+  // channel (line_token) is reused to push the alert to owner_line_id.
+  addCol('ALTER TABLE schools ADD COLUMN owner_line_id TEXT');
+  addCol('ALTER TABLE schools ADD COLUMN owner_link_code TEXT');
   // teacher LINE linking (parallel to the parent flow): a teacher adds the school's
   // OA and sends their personal link_code to start receiving notifications.
   addCol('ALTER TABLE teachers ADD COLUMN line_user_id TEXT');
@@ -385,6 +390,10 @@ export function initSchema() {
   } catch {}
   // leads belong to the school created at sign-up (scoped per-tenant for the leads list)
   addCol('ALTER TABLE leads ADD COLUMN school_id INTEGER');
+  // alternate payment channel: a merchant link (e.g. Payso) shown to parents alongside the QR
+  addCol('ALTER TABLE schools ADD COLUMN payso_link TEXT');
+  // lets a school show the QR but disable the in-portal slip-upload flow (manual confirmation instead)
+  addCol("ALTER TABLE schools ADD COLUMN slip_enabled INTEGER NOT NULL DEFAULT 1");
   // backfill existing leads: the sign-up lead shares the owner's email → resolve its school
   try {
     run(`UPDATE leads SET school_id = (

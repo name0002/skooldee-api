@@ -6,6 +6,10 @@ import { get, all } from './db.js';
 const SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
 const EXPIRES = process.env.JWT_EXPIRES || '7d';
 
+// Platform-level super-admin: comma-separated emails in PLATFORM_ADMIN_EMAILS env var.
+const _adminEmails = (process.env.PLATFORM_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+export const isPlatformAdmin = (email) => _adminEmails.length > 0 && _adminEmails.includes((email || '').toLowerCase());
+
 // ---- Access control model --------------------------------------------------
 // Pages a staff login can be granted, each at a level: 'none' | 'view' | 'manage'.
 // owner/admin always get full access (scope:'all', every page 'manage') and ignore

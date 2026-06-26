@@ -1359,12 +1359,26 @@ function SuperAdmin(){
   const [rows, setRows]   = React.useState(null);   // null = loading
   const [filter, setFilter] = React.useState('all'); // all | trial | active | expired
   const [detail, setDetail] = React.useState(null);  // school id expanded
+  const [lineStatus, setLineStatus] = React.useState(null);
+  const [lineBusy, setLineBusy] = React.useState(false);
+
+  const refreshLineStatus = ()=> window.API.ownerLineStatus().then(setLineStatus).catch(()=>{});
 
   React.useEffect(()=>{
     window.API.adminSchools()
       .then(d=>setRows(Array.isArray(d)?d:[]))
       .catch(e=>setRows({ _error: e.message||'โหลดไม่สำเร็จ' }));
+    refreshLineStatus();
   },[]);
+
+  const genOwnerCode = ()=>{
+    setLineBusy(true);
+    window.API.ownerLineGenCode().then(refreshLineStatus).finally(()=>setLineBusy(false));
+  };
+  const unlinkOwner = ()=>{
+    setLineBusy(true);
+    window.API.ownerLineUnlink().then(refreshLineStatus).finally(()=>setLineBusy(false));
+  };
 
   if(rows===null) return (
     <div style={{ textAlign:'center', padding:'60px 20px', color:'var(--text-3)', fontSize:14 }}>กำลังโหลด…</div>
@@ -1434,6 +1448,46 @@ function SuperAdmin(){
 
   return (
     <div style={{ maxWidth:1100, margin:'0 auto', padding:'4px 0 48px' }}>
+      {/* LINE notify (platform owner) */}
+      <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)',
+        padding:'14px 18px', marginBottom:16, display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
+        <div style={{ fontSize:13, fontWeight:600 }}>🔔 LINE แจ้งเตือนเจ้าของระบบ</div>
+        {lineStatus===null ? (
+          <span style={{ fontSize:12.5, color:'var(--text-3)' }}>กำลังโหลด…</span>
+        ) : lineStatus.linked ? (
+          <>
+            <span style={{ fontSize:12.5, color:'#065F46', fontWeight:600 }}>● เชื่อมต่อแล้ว</span>
+            <button onClick={unlinkOwner} disabled={lineBusy}
+              style={{ marginLeft:'auto', padding:'6px 14px', borderRadius:8, border:'1px solid var(--border)',
+                background:'var(--surface)', color:'var(--danger)', fontSize:12.5, fontWeight:600, cursor:'pointer' }}>
+              ยกเลิกการเชื่อมต่อ
+            </button>
+          </>
+        ) : lineStatus.link_code ? (
+          <>
+            <span style={{ fontSize:12.5, color:'var(--text-2)' }}>
+              ส่งรหัส <b style={{ fontFamily:'monospace' }}>{lineStatus.link_code}</b> ไปแชทกับ LINE OA ของโรงเรียนนี้ เพื่อรับแจ้งเตือน
+            </span>
+            <button onClick={genOwnerCode} disabled={lineBusy}
+              style={{ marginLeft:'auto', padding:'6px 14px', borderRadius:8, border:'none',
+                background:'var(--surface-2)', color:'var(--text-2)', fontSize:12.5, fontWeight:600, cursor:'pointer' }}>
+              สร้างรหัสใหม่
+            </button>
+          </>
+        ) : (
+          <>
+            <span style={{ fontSize:12.5, color:'var(--text-3)' }}>
+              ยังไม่เชื่อมต่อ{!lineStatus.has_line_channel && ' — ต้องตั้งค่า LINE Token ของโรงเรียนนี้ก่อน'}
+            </span>
+            <button onClick={genOwnerCode} disabled={lineBusy}
+              style={{ marginLeft:'auto', padding:'6px 14px', borderRadius:8, border:'none',
+                background:'var(--primary)', color:'#fff', fontSize:12.5, fontWeight:600, cursor:'pointer' }}>
+              สร้างรหัสเชื่อมต่อ
+            </button>
+          </>
+        )}
+      </div>
+
       {/* Summary stats */}
       <div style={{ display:'flex', gap:12, marginBottom:24, flexWrap:'wrap' }}>
         {statCard('โรงเรียนทั้งหมด', rows.length)}
@@ -1554,6 +1608,18 @@ function SuperAdmin(){
                       onClick={e=>e.stopPropagation()}>
                       {s.owner_email||'—'}
                     </a>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:11.5, color:'var(--text-3)', marginBottom:3 }}>โทรศัพท์</div>
+                    {s.owner_phone ? (
+                      <a href={'tel:'+s.owner_phone}
+                        style={{ fontWeight:600, fontSize:13, color:'var(--primary)' }}
+                        onClick={e=>e.stopPropagation()}>
+                        {s.owner_phone}
+                      </a>
+                    ) : (
+                      <div style={{ fontWeight:600, fontSize:13 }}>—</div>
+                    )}
                   </div>
                 </div>
               )}

@@ -133,5 +133,8 @@
 
     /* ---- Platform super-admin ---- */
     adminSchools: function () { return req('/api/admin/schools'); },
+    ownerLineStatus: function () { return req('/api/admin/owner-line'); },
+    ownerLineGenCode: function () { return req('/api/admin/owner-line/code', { method: 'POST' }); },
+    ownerLineUnlink: function () { return req('/api/admin/owner-line/unlink', { method: 'POST' }); },
   };
 })();

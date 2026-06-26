@@ -22,6 +22,7 @@ import users from './routes/users.js';
 import assessments from './routes/assessments.js';
 import enrollments from './routes/enrollments.js';
 import stripeRoutes from './routes/stripe.js';
+import adminRoutes from './routes/admin.js';
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
@@ -65,6 +66,7 @@ export function createApp() {
   app.use('/api/notify', notify);
   app.use('/api/schools', schools);
   app.use('/api/enrollments', enrollments);
+  app.use('/api/admin', adminRoutes);
 
   app.use((req, res) => res.status(404).json({ error: 'not found' }));
   return app;

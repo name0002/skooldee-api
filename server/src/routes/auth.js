@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { get, run } from '../db.js';
-import { hashPassword, verifyPassword, signToken, requireAuth, resolvePerms } from '../auth.js';
+import { hashPassword, verifyPassword, signToken, requireAuth, resolvePerms, isPlatformAdmin } from '../auth.js';
 import { wrap, required, bad } from '../util.js';
 import crypto from 'node:crypto';
 import { sendEmail, tplWelcome, tplPasswordReset, emailEnabled } from '../email.js';
+import { notifyPlatformOwner } from '../line-push.js';
 
 const r = Router();
 
@@ -28,6 +29,7 @@ r.post('/register', wrap((req, res) => {
     sendEmail({ to: email, ...tplWelcome({ schoolName: school, ownerName: name }) })
       .catch(e => console.error('[email] welcome failed:', e));
   }
+  notifyPlatformOwner(`🔔 ${school} ลงทะเบียนใหม่ — 14 วันทดลองเริ่มแล้ว\nผู้ติดต่อ: ${name} (${email})`);
   res.status(201).json({ token: signToken(user), user: { ...user, email } });
 }));
 
@@ -84,21 +86,22 @@ r.post('/reset-password', wrap((req, res) => {
   res.json({ ok: true, token: signToken(u) });
 }));
 
-// PATCH /api/auth/profile — update own display name
+// PATCH /api/auth/profile — update own display name + phone
 r.patch('/profile', requireAuth, wrap((req, res) => {
-  const { name } = req.body || {};
+  const { name, phone } = req.body || {};
   if (!name || !String(name).trim()) throw bad('name is required');
-  run('UPDATE users SET name = ? WHERE id = ?', String(name).trim(), req.user.uid);
-  res.json({ ok: true, name: String(name).trim() });
+  run('UPDATE users SET name = ?, phone = ? WHERE id = ?', String(name).trim(), phone ? String(phone).trim() : null, req.user.uid);
+  res.json({ ok: true, name: String(name).trim(), phone: phone ? String(phone).trim() : null });
 }));
 
 // GET /api/auth/me
 r.get('/me', requireAuth, wrap((req, res) => {
-  const row = get('SELECT id, school_id, name, email, role, teacher_id, permissions_json FROM users WHERE id = ?', req.user.uid);
+  const row = get('SELECT id, school_id, name, email, role, teacher_id, phone, permissions_json FROM users WHERE id = ?', req.user.uid);
   const user = {
     id: row.id, school_id: row.school_id, name: row.name, email: row.email, role: row.role,
-    teacher_id: row.teacher_id || null,
+    teacher_id: row.teacher_id || null, phone: row.phone || null,
     permissions: resolvePerms(row), // effective { scope, pages } — drives nav + write buttons
+    is_platform_admin: isPlatformAdmin(row.email),
   };
   // Return the FULL safe school object (not just the basics) — the app hydrates
   // DATA._schoolRaw from this on every load, so settings like business hours,
@@ -108,7 +111,8 @@ r.get('/me', requireAuth, wrap((req, res) => {
                         notify_prefs, name_display, hours_start, hours_end, contact_phone, line_oa_url,
                         line_oa_basic_id, liff_id, rooms_json, assessment_criteria_json,
                         show_assessments_to_parents, show_course_no_to_parents,
-                        invite_message_template, payment_qr_image, logo_image, created_at
+                        invite_message_template, payment_qr_image, logo_image,
+                        plan, plan_expires, created_at
                    FROM schools WHERE id = ?`, req.schoolId);
   let school = null;
   if (s) {

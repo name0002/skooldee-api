@@ -19,7 +19,7 @@ const r = Router();
  */
 r.post('/webhook/:schoolId', async (req, res) => {
   const sid = Number(req.params.schoolId);
-  const school = get('SELECT line_token, line_secret, line_welcome_enabled, line_welcome_message FROM schools WHERE id = ?', sid);
+  const school = get('SELECT line_token, line_secret, line_welcome_enabled, line_welcome_message, owner_link_code FROM schools WHERE id = ?', sid);
   if (!school) return res.sendStatus(404);
 
   // verify LINE signature if a channel secret is configured (recommended)
@@ -106,14 +106,23 @@ r.post('/webhook/:schoolId', async (req, res) => {
         /^[A-Za-z0-9-]{4,16}$/.test(raw);
       if (!looksLikeCode) continue; // free-text chat → stay silent, let the admin reply
 
+      // platform-owner link code is prefixed "OWN-" → the school's own owner linking
+      // their personal LINE to receive business notifications (new signups, plan
+      // changes, trial expiry, payment failures) through this school's own LINE channel.
+      const ownerLinking = code.startsWith('OWN-') && school.owner_link_code &&
+        code === String(school.owner_link_code).toUpperCase();
       // teacher link codes are prefixed "T" → try teachers first for those
-      const teacher = code.startsWith('T')
+      const teacher = (!ownerLinking && code.startsWith('T'))
         ? get('SELECT id, name FROM teachers WHERE school_id = ? AND UPPER(link_code) = ?', sid, code)
         : null;
-      const stu = teacher ? null : get(
+      const stu = (ownerLinking || teacher) ? null : get(
         'SELECT id, name, nickname FROM students WHERE school_id = ? AND UPPER(referral_code) = ?',
         sid, code);
-      if (teacher) {
+      if (ownerLinking) {
+        run('UPDATE schools SET owner_line_id = ?, owner_link_code = NULL WHERE id = ?', userId, sid);
+        await reply(school.line_token, ev.replyToken,
+          'เชื่อมต่อสำเร็จ ✓\n\nคุณจะได้รับแจ้งเตือนระบบผ่าน LINE นี้ เมื่อมีโรงเรียนสมัครใหม่ อัพเกรด/ดาวน์เกรดแพ็ค trial ใกล้หมดอายุ หรือการชำระเงินล้มเหลวค่ะ 🔔');
+      } else if (teacher) {
         run('UPDATE teachers SET line_user_id = ? WHERE id = ?', userId, teacher.id);
         const defaultMsg = `เชื่อมต่อสำเร็จ ✓\n\nครู${teacher.name} จะได้รับแจ้งเตือนตารางสอนและข่าวสารผ่าน LINE นี้แล้วค่ะ 🎉`;
         const msg = school.line_welcome_enabled && school.line_welcome_message ? school.line_welcome_message : defaultMsg;
