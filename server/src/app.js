@@ -24,6 +24,7 @@ import staffEvaluations from './routes/staffEvaluations.js';
 import enrollments from './routes/enrollments.js';
 import stripeRoutes from './routes/stripe.js';
 import adminRoutes from './routes/admin.js';
+import richMenu from './routes/richmenu.js';
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
@@ -67,6 +68,7 @@ export function createApp() {
   app.use('/api/dashboard', dashboard);
   app.use('/api/notify', notify);
   app.use('/api/schools', schools);
+  app.use('/api/rich-menu', richMenu);
   app.use('/api/enrollments', enrollments);
   app.use('/api/admin', adminRoutes);
 

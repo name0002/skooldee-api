@@ -72,6 +72,28 @@ r.post('/webhook/:schoolId', async (req, res) => {
               `🙏 ผู้ปกครองแจ้งลาล่วงหน้า: น้อง${nm} จะไม่มาเรียนวันที่ ${date} ค่ะ`);
           }
         }
+      } else if (action === 'packages') {
+        // Rich Menu "course balance" button → reply with remaining sessions per child.
+        const students = all(
+          'SELECT name, nickname, sessions_remaining, packages_json FROM students WHERE line_user_id = ? AND school_id = ? AND status != ? ORDER BY id',
+          userId, sid, 'inactive'
+        );
+        if (students.length) {
+          const lines = students.map((s) => {
+            const nm = `น้อง${s.nickname || s.name}`;
+            let pkgs = [];
+            try { if (s.packages_json) { const a = JSON.parse(s.packages_json); if (Array.isArray(a)) pkgs = a; } } catch { /* ignore */ }
+            const perSubject = pkgs.filter((p) => p && (p.sessions_total || 0) > 0);
+            if (perSubject.length) {
+              return `${nm}\n` + perSubject.map((p) => `  • ${p.name || p.category || 'คอร์ส'}: เหลือ ${p.sessions_remaining || 0} ครั้ง`).join('\n');
+            }
+            return `${nm}: เหลือ ${s.sessions_remaining || 0} ครั้ง`;
+          });
+          await reply(school.line_token, ev.replyToken, `📦 คอร์สคงเหลือ\n\n${lines.join('\n\n')}`);
+        } else {
+          await reply(school.line_token, ev.replyToken,
+            'ยังไม่พบข้อมูลในระบบค่ะ 🙏\nรบกวนติดต่อทางโรงเรียนเพื่อขอรหัสเชื่อมต่อก่อนนะคะ');
+        }
       } else if (action === 'parent_portal') {
         const students = all(
           'SELECT name, nickname, parent_token FROM students WHERE line_user_id = ? AND school_id = ? AND status != ? ORDER BY id',

@@ -32,6 +32,7 @@ function Settings({ go }){
         {tab('payment',    '💳 ชำระเงิน')}
         {tab('staff',      '👥 บัญชีพนักงาน')}
         {tab('line',       '🔔 LINE แจ้งเตือน')}
+        {tab('richmenu',   '🎛️ เมนู LINE')}
         {tab('profile',    '👤 ข้อมูลผู้ใช้')}
         {tab('account',    '🔐 บัญชีและความปลอดภัย')}
       </div>
@@ -44,6 +45,7 @@ function Settings({ go }){
       {section==='payment'     && <PaymentSettingsSection showToast={showToast}/>}
       {section==='staff'       && <StaffSettingsSection showToast={showToast}/>}
       {section==='line'        && <LineSettingsSection showToast={showToast}/>}
+      {section==='richmenu'    && <RichMenuSettingsSection showToast={showToast}/>}
       {section==='profile'     && <ProfileSettingsSection showToast={showToast}/>}
       {section==='account'     && <AccountSettingsSection showToast={showToast} go={go}/>}
 
@@ -1865,6 +1867,395 @@ function LineSettingsSection({ showToast }){
         <div style={{ marginTop:6, padding:'11px 14px', background:'var(--primary-soft)', borderRadius:10,
           fontSize:12.5, color:'var(--primary-ink)', lineHeight:1.6 }}>
           💡 Token และ Secret เก็บไว้ในระบบแบบไม่แสดงซ้ำ — ถ้าต้องเปลี่ยนให้ใส่ค่าใหม่ทับได้เลย
+        </div>
+      </SettingsCard>
+    </>
+  );
+}
+
+/* ===================== LINE Rich Menu builder ===================== */
+/* The tappable menu pinned under the OA chat. Two equal modes:
+ *   • template — pick a grid, label/colour each button; we render the PNG in-browser
+ *   • upload   — bring a finished 2500×1686 / 2500×843 image; the grid defines tap areas
+ * Both produce { size, areas[{bounds,action}], image } that POST /api/rich-menu/publish
+ * sends to LINE (create → upload image → set as default for all followers).            */
+
+const RM_SIZES   = { large: { width: 2500, height: 1686 }, compact: { width: 2500, height: 843 } };
+const RM_PRESETS = [
+  { key:'c3', label:'3 ปุ่ม',            size:'compact', rows:[{cols:3}] },
+  { key:'c2', label:'2 ปุ่ม',            size:'compact', rows:[{cols:2}] },
+  { key:'l4', label:'4 ปุ่ม (2×2)',      size:'large',   rows:[{cols:2},{cols:2}] },
+  { key:'l6', label:'6 ปุ่ม (3×2)',      size:'large',   rows:[{cols:3},{cols:3}] },
+  { key:'b3', label:'แบนเนอร์ + 3 ปุ่ม', size:'large',   rows:[{cols:1},{cols:3}] },
+  { key:'b2', label:'แบนเนอร์ + 2 ปุ่ม', size:'large',   rows:[{cols:1},{cols:2}] },
+];
+const RM_DESTS = [
+  { key:'booking',  label:'จองคลาส',     icon:'📅', needsUrl:false },
+  { key:'portal',   label:'ข้อมูลของฉัน', icon:'👤', needsUrl:false },
+  { key:'packages', label:'คอร์สคงเหลือ', icon:'📦', needsUrl:false },
+  { key:'website',  label:'เว็บไซต์',     icon:'🌐', needsUrl:true  },
+  { key:'custom',   label:'ลิงก์อื่น',    icon:'🔗', needsUrl:true  },
+];
+const RM_PALETTE = ['#FDE2E4','#E2ECE9','#E4E9FD','#FFF1D6','#E8E4FD','#D6F0FF'];
+const rmDest = (k)=> RM_DESTS.find(d=>d.key===k) || null;
+const rmCellCount = (rows)=> rows.reduce((s,r)=>s+(r.cols||0), 0);
+const rmDefaultButton = (i)=>({ dest:'', label:'', icon:'', url:'', color:RM_PALETTE[i%RM_PALETTE.length] });
+function rmResizeButtons(rows, prev){
+  const n = rmCellCount(rows); const out=[];
+  for(let i=0;i<n;i++) out.push(prev[i] || rmDefaultButton(i));
+  return out;
+}
+// Row-major pixel bounds for every cell — cumulative rounding guarantees full, gap-free
+// coverage that stays inside the menu size (what LINE requires).
+function rmBounds(sz, rows){
+  const out=[]; const R=rows.length;
+  for(let i=0;i<R;i++){
+    const y=Math.round(i*sz.height/R), y2=Math.round((i+1)*sz.height/R), cols=rows[i].cols;
+    for(let j=0;j<cols;j++){
+      const x=Math.round(j*sz.width/cols), x2=Math.round((j+1)*sz.width/cols);
+      out.push({ x, y, width:x2-x, height:y2-y });
+    }
+  }
+  return out;
+}
+// Draw the menu image at full resolution. Flat colours keep PNG tiny; fall back to JPEG
+// only if it would exceed LINE's 1 MB limit.
+function rmRenderImage(sz, rows, buttons, bg){
+  const c=document.createElement('canvas'); c.width=sz.width; c.height=sz.height;
+  const x=c.getContext('2d');
+  x.fillStyle=bg||'#ffffff'; x.fillRect(0,0,sz.width,sz.height);
+  const bnds=rmBounds(sz, rows);
+  bnds.forEach((b,i)=>{
+    const btn=buttons[i]||{};
+    if(btn.color){ x.fillStyle=btn.color; x.fillRect(b.x,b.y,b.width,b.height); }
+    x.strokeStyle='rgba(0,0,0,0.10)'; x.lineWidth=3; x.strokeRect(b.x+1.5,b.y+1.5,b.width-3,b.height-3);
+    const cx=b.x+b.width/2, cy=b.y+b.height/2;
+    const hasLabel=btn.label && btn.label.trim();
+    x.textAlign='center'; x.textBaseline='middle';
+    if(btn.icon){
+      const isz=Math.min(b.width,b.height)*0.34;
+      x.font=isz+'px "Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif';
+      x.fillText(btn.icon, cx, hasLabel ? cy-isz*0.42 : cy);
+    }
+    if(hasLabel){
+      const fs=Math.min(b.width*0.13, b.height*0.20, 70);
+      x.fillStyle='#2b2b2b';
+      x.font='600 '+fs+'px "IBM Plex Sans Thai","Sarabun","Noto Sans Thai",sans-serif';
+      x.fillText(btn.label.trim(), cx, btn.icon ? cy+Math.min(b.width,b.height)*0.16 : cy);
+    }
+  });
+  let url=c.toDataURL('image/png');
+  if(url.length>1300000) url=c.toDataURL('image/jpeg',0.85);
+  return url;
+}
+
+function RichMenuSettingsSection({ showToast }){
+  const inp = useInpStyle();
+  const slug   = (DATA._schoolRaw && DATA._schoolRaw.slug) || '';
+  const oaUrl  = (DATA._schoolRaw && DATA._schoolRaw.line_oa_url) || '';
+  const bookUrl = slug ? `https://skooldee.com/book?school=${encodeURIComponent(slug)}` : 'https://skooldee.com/book';
+
+  const [loading, setLoading]   = useState(true);
+  const [lineCfg, setLineCfg]   = useState(false);
+  const [published, setPublished] = useState(false);
+  const [activeOnLine, setActiveOnLine] = useState(null);
+  const [savedImage, setSavedImage] = useState(null);
+
+  const [mode, setMode]         = useState('template'); // 'template' | 'upload'
+  const [sizeKey, setSizeKey]   = useState('compact');
+  const [rows, setRows]         = useState([{cols:3}]);
+  const [buttons, setButtons]   = useState(()=>rmResizeButtons([{cols:3}], []));
+  const [chatBarText, setChatBarText] = useState('เมนู');
+  const [bgColor, setBgColor]   = useState('#ffffff');
+  const [uploadImage, setUploadImage] = useState(null);
+  const [uploadErr, setUploadErr] = useState('');
+  const [busy, setBusy]         = useState(false);
+  const fileRef = React.useRef();
+
+  const sz = RM_SIZES[sizeKey];
+
+  React.useEffect(()=>{
+    if(!(DATA._isLiveMode && window.API && window.API.richMenu)){ setLoading(false); return; }
+    window.API.richMenu().then(r=>{
+      setLineCfg(!!r.line_configured);
+      setPublished(!!r.published);
+      setActiveOnLine(r.active_on_line);
+      setSavedImage(r.image||null);
+      const cfg=r.config;
+      if(cfg && typeof cfg==='object'){
+        if(cfg.mode) setMode(cfg.mode);
+        if(cfg.size && RM_SIZES[cfg.size]) setSizeKey(cfg.size);
+        if(Array.isArray(cfg.rows) && cfg.rows.length){ setRows(cfg.rows); setButtons(rmResizeButtons(cfg.rows, cfg.buttons||[])); }
+        if(cfg.chatBarText) setChatBarText(cfg.chatBarText);
+        if(cfg.bgColor) setBgColor(cfg.bgColor);
+        if(cfg.mode==='upload' && r.image) setUploadImage(r.image);
+      }
+    }).catch(()=>{}).finally(()=>setLoading(false));
+  }, []);
+
+  // ---- layout editing (keeps the buttons array in lockstep with the grid) ----
+  const applyPreset = (p)=>{
+    setSizeKey(p.size);
+    const r = p.rows.map(x=>({cols:x.cols}));
+    setRows(r); setButtons(b=>rmResizeButtons(r, b));
+  };
+  const setRowCols = (i, cols)=>{
+    cols=Math.max(1, Math.min(4, cols));
+    const r = rows.map((x,idx)=> idx===i ? {cols} : x);
+    if(rmCellCount(r)>20){ showToast('Rich Menu มีได้สูงสุด 20 ปุ่ม','error'); return; }
+    setRows(r); setButtons(b=>rmResizeButtons(r, b));
+  };
+  const addRow = ()=>{
+    const r=[...rows,{cols:2}];
+    if(rmCellCount(r)>20){ showToast('Rich Menu มีได้สูงสุด 20 ปุ่ม','error'); return; }
+    setRows(r); setButtons(b=>rmResizeButtons(r, b));
+  };
+  const removeRow = (i)=>{
+    if(rows.length<=1) return;
+    const r=rows.filter((_,idx)=>idx!==i);
+    setRows(r); setButtons(b=>rmResizeButtons(r, b));
+  };
+  const setBtn = (i, patch)=> setButtons(bs=> bs.map((b,idx)=> idx===i ? {...b, ...patch} : b));
+  const onDest = (i, key)=>{
+    const d=rmDest(key); const b=buttons[i]||{};
+    setBtn(i, { dest:key, label:b.label||(d?d.label:''), icon:b.icon||(d?d.icon:'') });
+  };
+
+  const onUpload = (e)=>{
+    const f=e.target.files && e.target.files[0]; if(!f){ return; }
+    const rd=new FileReader();
+    rd.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        const match=Object.entries(RM_SIZES).find(([,v])=>v.width===img.naturalWidth && v.height===img.naturalHeight);
+        if(!match){ setUploadErr(`ขนาดรูปต้องเป็น 2500×1686 หรือ 2500×843 — ได้รับ ${img.naturalWidth}×${img.naturalHeight}`); return; }
+        let url=rd.result;
+        if(typeof url==='string' && url.length>1300000){
+          const c=document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight;
+          c.getContext('2d').drawImage(img,0,0); url=c.toDataURL('image/jpeg',0.85);
+        }
+        setUploadErr(''); setSizeKey(match[0]); setUploadImage(url);
+      };
+      img.onerror=()=> setUploadErr('อ่านรูปไม่สำเร็จ');
+      img.src=rd.result;
+    };
+    rd.readAsDataURL(f);
+    if(e.target) e.target.value='';
+  };
+
+  const rmActionFor = (b)=>{
+    switch(b.dest){
+      case 'booking':  return { type:'uri', uri:bookUrl, label:(b.label||'จองคลาส').slice(0,20) };
+      case 'portal':   return { type:'postback', data:'action=parent_portal', displayText:b.label||'ข้อมูลของฉัน' };
+      case 'packages': return { type:'postback', data:'action=packages', displayText:b.label||'คอร์สคงเหลือ' };
+      case 'website':  return { type:'uri', uri:(b.url||oaUrl||'https://skooldee.com').trim(), label:(b.label||'เว็บไซต์').slice(0,20) };
+      case 'custom':   return { type:'uri', uri:(b.url||'').trim(), label:(b.label||'ลิงก์').slice(0,20) };
+      default: return null;
+    }
+  };
+
+  const publish = async()=>{
+    if(!lineCfg){ showToast('เชื่อมต่อ LINE ก่อน (แท็บ 🔔 LINE แจ้งเตือน)','error'); return; }
+    for(let i=0;i<buttons.length;i++){
+      const b=buttons[i], d=rmDest(b.dest);
+      if(!d){ showToast(`ปุ่มที่ ${i+1}: ยังไม่ได้เลือกปลายทาง`,'error'); return; }
+      if(d.needsUrl && !((b.url||(b.dest==='website'&&oaUrl)||'')).trim()){ showToast(`ปุ่มที่ ${i+1}: ใส่ลิงก์ก่อน`,'error'); return; }
+    }
+    let image;
+    if(mode==='upload'){
+      if(!uploadImage){ showToast('อัปโหลดรูปเมนูก่อน','error'); return; }
+      image=uploadImage;
+    } else {
+      image=rmRenderImage(sz, rows, buttons, bgColor);
+    }
+    const areas=rmBounds(sz, rows).map((bnds,i)=>({ bounds:bnds, action:rmActionFor(buttons[i]) }));
+    const config={ mode, size:sizeKey, rows, buttons, chatBarText, bgColor };
+    setBusy(true);
+    try{
+      await window.API.publishRichMenu({ size:sz, chatBarText:chatBarText||'เมนู', name:'skooldee:'+(slug||'menu'), areas, image, config });
+      setPublished(true); setActiveOnLine(true); setSavedImage(image);
+      showToast('เผยแพร่เมนูไปยัง LINE แล้ว ✓ — ผู้ที่แอด OA จะเห็นเมนูนี้');
+    }catch(ex){ showToast(ex.message||'เผยแพร่ไม่สำเร็จ','error'); }
+    setBusy(false);
+  };
+
+  const remove = async()=>{
+    if(!confirm('ลบ Rich Menu ออกจาก LINE? ผู้ใช้จะไม่เห็นเมนูนี้อีก')) return;
+    setBusy(true);
+    try{
+      await window.API.deleteRichMenu();
+      setPublished(false); setActiveOnLine(null); setSavedImage(null);
+      showToast('ลบเมนูแล้ว');
+    }catch(ex){ showToast(ex.message||'ลบไม่สำเร็จ','error'); }
+    setBusy(false);
+  };
+
+  if(loading) return <SettingsCard title="เมนู LINE (Rich Menu)"><div style={{ color:'var(--text-3)', fontSize:13.5 }}>กำลังโหลด…</div></SettingsCard>;
+
+  // ---- live preview (scaled): colours+icon+label in template mode, image+overlay in upload ----
+  const pct=(b)=>({ left:`${b.x/sz.width*100}%`, top:`${b.y/sz.height*100}%`, width:`${b.width/sz.width*100}%`, height:`${b.height/sz.height*100}%` });
+  const previewBnds=rmBounds(sz, rows);
+  const Preview=()=>(
+    <div style={{ position:'relative', width:'100%', maxWidth:480, aspectRatio:`${sz.width} / ${sz.height}`,
+      margin:'0 auto', borderRadius:12, overflow:'hidden', border:'1px solid var(--border)',
+      background: mode==='upload' ? 'var(--surface-2)' : bgColor }}>
+      {mode==='upload' && uploadImage && <img src={uploadImage} alt="เมนู" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>}
+      {previewBnds.map((b,i)=>{
+        const btn=buttons[i]||{};
+        return (
+          <div key={i} style={{ position:'absolute', ...pct(b),
+            background: mode==='template' ? (btn.color||'transparent') : 'rgba(0,0,0,0.04)',
+            border:'1px solid rgba(0,0,0,0.10)', display:'flex', flexDirection:'column',
+            alignItems:'center', justifyContent:'center', gap:2, boxSizing:'border-box', overflow:'hidden' }}>
+            {mode==='template' && btn.icon && <span style={{ fontSize:22, lineHeight:1 }}>{btn.icon}</span>}
+            {btn.label
+              ? <span style={{ fontSize:12, fontWeight:600, color: mode==='upload'?'#fff':'#2b2b2b',
+                  textShadow: mode==='upload'?'0 1px 3px rgba(0,0,0,.6)':'none', textAlign:'center', padding:'0 4px' }}>{btn.label}</span>
+              : <span style={{ fontSize:11, color:'var(--text-3)' }}>ปุ่ม {i+1}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <>
+      <SettingsCard title="เมนู LINE (Rich Menu)"
+        sub="เมนูปุ่มกดที่ปักอยู่ใต้ห้องแชต Official Account — ให้ผู้ปกครองกดเข้าจองคลาส ดูข้อมูล หรือเปิดเว็บไซต์ได้ทันที">
+        {!lineCfg && (
+          <div style={{ padding:'11px 14px', background:'#fff4e5', border:'1px solid #ffd596', borderRadius:10, fontSize:13, color:'#8a5a00', lineHeight:1.6 }}>
+            ⚠️ ยังไม่ได้เชื่อมต่อ LINE — ไปที่แท็บ <b>🔔 LINE แจ้งเตือน</b> เพื่อใส่ Channel Access Token ก่อน แล้วจึงเผยแพร่เมนูได้
+          </div>
+        )}
+        {published && (
+          <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginTop: !lineCfg?14:0 }}>
+            <span style={{ padding:'4px 14px', borderRadius:20, fontSize:13, fontWeight:700, background:'#06c75522', color:'#06a046' }}>● เผยแพร่แล้ว</span>
+            {activeOnLine===false && <span style={{ fontSize:12.5, color:'var(--danger)' }}>(เมนูถูกเปลี่ยน/ลบบน LINE — เผยแพร่ใหม่เพื่อแก้)</span>}
+            <button className="btn btn-sm" style={{ color:'var(--danger)', borderColor:'var(--danger)' }} disabled={busy} onClick={remove}>ลบเมนูออกจาก LINE</button>
+          </div>
+        )}
+      </SettingsCard>
+
+      {/* mode switch */}
+      <SettingsCard title="รูปแบบเมนู">
+        <div style={{ display:'flex', gap:8, marginBottom:6, flexWrap:'wrap' }}>
+          {[['template','🎨 สร้างจากเทมเพลต'],['upload','🖼️ อัปโหลดรูปเอง']].map(([k,lbl])=>(
+            <button key={k} onClick={()=>setMode(k)} style={{ padding:'8px 16px', borderRadius:8, cursor:'pointer',
+              border:'1.5px solid '+(mode===k?'var(--primary)':'var(--border)'), fontWeight:600, fontSize:13,
+              background: mode===k?'var(--primary-soft)':'var(--surface)', color: mode===k?'var(--primary-ink)':'var(--text-2)' }}>{lbl}</button>
+          ))}
+        </div>
+        <div style={{ fontSize:12.5, color:'var(--text-3)', lineHeight:1.55 }}>
+          {mode==='template'
+            ? 'เลือกตาราง ใส่ไอคอน/ข้อความ/สีให้แต่ละปุ่ม — ระบบสร้างรูปเมนูให้อัตโนมัติ ไม่ต้องใช้โปรแกรมออกแบบ'
+            : 'อัปโหลดรูปที่ออกแบบเองขนาด 2500×1686 (เต็ม) หรือ 2500×843 (เตี้ย) แล้วกำหนดพื้นที่กดด้วยตารางด้านล่าง'}
+        </div>
+      </SettingsCard>
+
+      {/* layout / image source */}
+      <SettingsCard title={mode==='upload' ? 'รูปเมนู + พื้นที่กด' : 'เลือกเลย์เอาต์'}>
+        {mode==='upload' && (
+          <div style={{ marginBottom:18 }}>
+            <input ref={fileRef} type="file" accept="image/png,image/jpeg" style={{ display:'none' }} onChange={onUpload}/>
+            <button className="btn btn-soft btn-sm" onClick={()=>fileRef.current && fileRef.current.click()}>
+              {uploadImage ? '🔄 เปลี่ยนรูป' : '📷 อัปโหลดรูปเมนู'}
+            </button>
+            <span style={{ fontSize:12, color:'var(--text-3)', marginLeft:10 }}>PNG/JPEG · 2500×1686 หรือ 2500×843 · ≤ 1 MB</span>
+            {uploadErr && <div style={{ fontSize:12.5, color:'var(--danger)', marginTop:8 }}>{uploadErr}</div>}
+          </div>
+        )}
+        {mode==='template' && (
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:16 }}>
+            {RM_PRESETS.map(p=>(
+              <button key={p.key} onClick={()=>applyPreset(p)} className="btn btn-sm"
+                style={{ fontSize:12.5 }}>{p.label}</button>
+            ))}
+          </div>
+        )}
+
+        {/* per-row column editor (defines the tap-area grid for BOTH modes) */}
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {rows.map((r,i)=>(
+            <div key={i} style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+              <span style={{ fontSize:12.5, color:'var(--text-3)', width:54 }}>แถว {i+1}</span>
+              <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                <button className="btn btn-sm" style={{ padding:'4px 10px' }} onClick={()=>setRowCols(i, r.cols-1)} disabled={r.cols<=1}>−</button>
+                <span style={{ fontSize:13, fontWeight:600, minWidth:64, textAlign:'center' }}>{r.cols} ปุ่ม</span>
+                <button className="btn btn-sm" style={{ padding:'4px 10px' }} onClick={()=>setRowCols(i, r.cols+1)} disabled={r.cols>=4}>+</button>
+              </div>
+              {rows.length>1 && <button className="btn btn-sm" style={{ color:'var(--danger)', fontSize:12 }} onClick={()=>removeRow(i)}>ลบแถว</button>}
+            </div>
+          ))}
+          <div><button className="btn btn-sm btn-soft" onClick={addRow}>+ เพิ่มแถว</button></div>
+        </div>
+
+        {mode==='template' && (
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:16 }}>
+            <label style={{ fontSize:13, fontWeight:600 }}>สีพื้นหลัง</label>
+            <input type="color" value={bgColor} onChange={e=>setBgColor(e.target.value)} style={{ width:44, height:32, border:'1px solid var(--border)', borderRadius:6, cursor:'pointer', background:'none' }}/>
+          </div>
+        )}
+      </SettingsCard>
+
+      {/* per-button settings */}
+      <SettingsCard title="ตั้งค่าปุ่ม" sub="กำหนดปลายทางของแต่ละปุ่ม (เรียงซ้าย→ขวา บน→ล่าง)">
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          {buttons.map((b,i)=>{
+            const d=rmDest(b.dest);
+            return (
+              <div key={i} style={{ border:'1px solid var(--border)', borderRadius:10, padding:'14px 16px' }}>
+                <div style={{ fontWeight:700, fontSize:13.5, marginBottom:10 }}>ปุ่มที่ {i+1}</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                  <div>
+                    <label style={{ display:'block', fontSize:12, fontWeight:600, marginBottom:4 }}>ปลายทาง</label>
+                    <select style={{ ...inp, padding:'8px 10px' }} value={b.dest} onChange={e=>onDest(i, e.target.value)}>
+                      <option value="">— เลือก —</option>
+                      {RM_DESTS.map(o=><option key={o.key} value={o.key}>{o.icon} {o.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display:'block', fontSize:12, fontWeight:600, marginBottom:4 }}>ข้อความบนปุ่ม{mode==='upload'?' (ไม่บังคับ)':''}</label>
+                    <input style={{ ...inp, padding:'8px 10px' }} value={b.label} onChange={e=>setBtn(i,{label:e.target.value})} placeholder={d?d.label:'เช่น จองคลาส'}/>
+                  </div>
+                  {mode==='template' && (
+                    <div>
+                      <label style={{ display:'block', fontSize:12, fontWeight:600, marginBottom:4 }}>ไอคอน (อีโมจิ)</label>
+                      <input style={{ ...inp, padding:'8px 10px' }} value={b.icon} maxLength={2} onChange={e=>setBtn(i,{icon:e.target.value})} placeholder="📅"/>
+                    </div>
+                  )}
+                  {mode==='template' && (
+                    <div>
+                      <label style={{ display:'block', fontSize:12, fontWeight:600, marginBottom:4 }}>สีปุ่ม</label>
+                      <input type="color" value={b.color||'#ffffff'} onChange={e=>setBtn(i,{color:e.target.value})} style={{ width:'100%', height:38, border:'1px solid var(--border)', borderRadius:8, cursor:'pointer', background:'none' }}/>
+                    </div>
+                  )}
+                  {d && d.needsUrl && (
+                    <div style={{ gridColumn:'1 / -1' }}>
+                      <label style={{ display:'block', fontSize:12, fontWeight:600, marginBottom:4 }}>ลิงก์ (https://…)</label>
+                      <input style={{ ...inp, padding:'8px 10px' }} value={b.url} onChange={e=>setBtn(i,{url:e.target.value})} placeholder={b.dest==='website'&&oaUrl?oaUrl:'https://example.com'}/>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </SettingsCard>
+
+      {/* preview + publish */}
+      <SettingsCard title="ตัวอย่าง & เผยแพร่">
+        <Preview/>
+        <div style={{ marginTop:16 }}>
+          <label style={{ display:'block', fontSize:13, fontWeight:600, marginBottom:6 }}>ข้อความบนแถบเมนู <span style={{ fontWeight:400, color:'var(--text-3)', fontSize:12 }}>(สูงสุด 14 ตัวอักษร)</span></label>
+          <input style={{ ...inp, maxWidth:260 }} value={chatBarText} maxLength={14} onChange={e=>setChatBarText(e.target.value)} placeholder="เมนู"/>
+        </div>
+        <div style={{ marginTop:18, display:'flex', gap:10, flexWrap:'wrap' }}>
+          <button className="btn btn-primary" style={{ padding:'10px 26px', fontWeight:700 }} disabled={busy||!lineCfg} onClick={publish}>
+            {busy ? 'กำลังเผยแพร่…' : published ? '🔄 อัปเดตเมนูบน LINE' : '🚀 เผยแพร่ไปยัง LINE'}
+          </button>
+        </div>
+        <div style={{ marginTop:12, fontSize:12.5, color:'var(--text-3)', lineHeight:1.6 }}>
+          เมื่อเผยแพร่ ระบบจะตั้งเมนูนี้เป็นค่าเริ่มต้นให้ทุกคนที่แอด OA โดยอัตโนมัติ · ปุ่ม "จองคลาส" ลิงก์ไป <code style={{ background:'var(--surface-2)', padding:'1px 5px', borderRadius:4, fontFamily:'monospace', fontSize:11.5 }}>skooldee.com/book</code> ของโรงเรียนคุณ
         </div>
       </SettingsCard>
     </>

@@ -401,6 +401,15 @@ export function initSchema() {
   // channel (line_token) is reused to push the alert to owner_line_id.
   addCol('ALTER TABLE schools ADD COLUMN owner_line_id TEXT');
   addCol('ALTER TABLE schools ADD COLUMN owner_link_code TEXT');
+  // LINE Rich Menu (the tappable menu pinned to the bottom of the OA chat):
+  //   rich_menu_id     — the LINE-assigned id of the currently-published menu (so we
+  //                      can delete/replace it). NULL = none published.
+  //   rich_menu_config — JSON of the builder state (mode, size, layout rows, per-button
+  //                      label/icon/action) so the builder reloads exactly as saved.
+  //   rich_menu_image  — data-URL of the image we uploaded, kept for preview re-display.
+  addCol('ALTER TABLE schools ADD COLUMN rich_menu_id TEXT');
+  addCol('ALTER TABLE schools ADD COLUMN rich_menu_config TEXT');
+  addCol('ALTER TABLE schools ADD COLUMN rich_menu_image TEXT');
   // teacher LINE linking (parallel to the parent flow): a teacher adds the school's
   // OA and sends their personal link_code to start receiving notifications.
   addCol('ALTER TABLE teachers ADD COLUMN line_user_id TEXT');
