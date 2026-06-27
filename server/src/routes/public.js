@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { all, get, run } from '../db.js';
 import { wrap, bad, hhmm } from '../util.js';
 import { sendEmail, tplNewEnrollment } from '../email.js';
-import { maybeNotifyTeacher } from '../line-push.js';
+import { maybeNotifyTeacher, pushToParent } from '../line-push.js';
 
 const r = Router();
 
@@ -511,11 +511,20 @@ r.post('/book', wrap((req, res) => {
     school.id, s.id, student ? student.id : null, name, phone, line,
     String(b.note || '').trim().slice(0, 300) || null, exceptionId);
 
-  // notify the teacher their schedule gained a makeup class
-  if (exceptionId && s.teacher_id) {
-    const who = student ? (student.nickname || student.name) : (name || 'นักเรียน');
+  // notify the assigned teacher about the new booking (any kind, not just makeup)
+  if (s.teacher_id) {
+    const who = student ? (student.nickname || student.name) : (name || 'นักเรียนใหม่');
+    const verb = s.kind === 'makeup' ? 'จองเรียนชดเชย' : `จอง${KIND_LABEL[s.kind] || s.kind}`;
     maybeNotifyTeacher(school.id, s.teacher_id, 't_change',
-      `🗓️ มีการจองเรียนชดเชย\nวันที่ ${s.date} เวลา ${hhmm(s.start_min)}–${hhmm(s.end_min)} น.\nนักเรียน: ${who}`);
+      `🗓️ มีการ${verb}\nวันที่ ${s.date} เวลา ${hhmm(s.start_min)}–${hhmm(s.end_min)} น.\nนักเรียน: ${who}`);
+  }
+
+  // send the booker a LINE receipt — only possible for an existing student whose
+  // parent already linked LINE (a prospect's typed-in "line" field isn't a real userId)
+  if (student) {
+    pushToParent(school.id, student.id,
+      `✅ จองคลาสสำเร็จ\n${KIND_LABEL[s.kind] || s.kind}${s.title ? ' · ' + s.title : ''}\n📅 ${s.date} เวลา ${hhmm(s.start_min)}–${hhmm(s.end_min)} น.${s.fee != null ? `\n💰 ${Number(s.fee).toLocaleString()} บาท` : ''}`,
+    ).catch(() => {});
   }
 
   // a trial booking by a prospect also drops into the admin's enrollment-requests inbox
@@ -534,6 +543,44 @@ r.post('/book', wrap((req, res) => {
     booking_id: Number(result.lastInsertRowid),
     session: publicSession({ ...s, teacher_name: null }),
   });
+}));
+
+// GET /api/public/book/mine?token=  OR  ?slug=&phone=  → list of MY OWN bookings.
+// Existing students are scoped by their token; prospects (no account) are scoped by
+// the phone number they booked with, same trust level already used by /book/cancel.
+r.get('/book/mine', wrap((req, res) => {
+  const token = String(req.query.token || '');
+  const slug = String(req.query.slug || '');
+  const phone = String(req.query.phone || '').trim();
+
+  let schoolId, where, param;
+  if (token.length >= 8) {
+    const student = get('SELECT id, school_id FROM students WHERE parent_token = ?', token);
+    if (!student) throw bad('not found', 404);
+    schoolId = student.school_id; where = 'b.student_id = ?'; param = student.id;
+  } else if (slug && phone) {
+    const school = get('SELECT id FROM schools WHERE LOWER(slug) = ?', slug.toLowerCase().trim());
+    if (!school) throw bad('not found', 404);
+    schoolId = school.id; where = "b.student_id IS NULL AND b.booker_phone = ?"; param = phone;
+  } else {
+    throw bad('missing token or slug+phone', 400);
+  }
+
+  const rows = all(
+    `SELECT b.id, b.status, b.created_at, bs.kind, bs.title, bs.category, bs.date,
+            bs.start_min, bs.end_min, bs.fee, t.name AS teacher_name
+       FROM bookings b JOIN bookable_sessions bs ON bs.id = b.session_id
+       LEFT JOIN teachers t ON t.id = bs.teacher_id
+      WHERE b.school_id = ? AND ${where}
+      ORDER BY bs.date DESC, bs.start_min DESC LIMIT 20`, schoolId, param);
+
+  res.json({ bookings: rows.map((b) => ({
+    id: b.id, status: b.status,
+    kind: b.kind, kind_label: KIND_LABEL[b.kind] || b.kind,
+    title: b.title || null, category: b.category || null, teacher: b.teacher_name || null,
+    date: b.date, day: DOW[(new Date(b.date + 'T00:00:00Z').getUTCDay() + 6) % 7] || '',
+    start: hhmm(b.start_min), end: hhmm(b.end_min), fee: b.fee != null ? b.fee : null,
+  })) });
 }));
 
 // POST /api/public/book/cancel — cancel a booking (token-scoped, or by booking id + phone)
