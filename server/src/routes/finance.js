@@ -168,8 +168,11 @@ r.post('/invoices/:id/approve-slip', wrap((req, res) => {
 
 // POST /api/finance/invoices/:id/reject-slip — admin rejects a parent-submitted slip → back to unpaid
 r.post('/invoices/:id/reject-slip', wrap((req, res) => {
-  const inv = get('SELECT id FROM invoices WHERE id = ? AND school_id = ?', req.params.id, req.schoolId);
+  const inv = get('SELECT id, status FROM invoices WHERE id = ? AND school_id = ?', req.params.id, req.schoolId);
   if (!inv) throw bad('invoice not found', 404);
+  // never reject a slip on an already-paid invoice: that would flip it back to unpaid
+  // without reversing the sessions the payment already granted (free top-up on an unpaid bill).
+  if (inv.status === 'paid') throw bad('ใบแจ้งหนี้นี้ชำระแล้ว ไม่สามารถปฏิเสธสลิปได้');
   run("UPDATE invoices SET status = 'unpaid', slip_image = NULL WHERE id = ? AND school_id = ?", inv.id, req.schoolId);
   res.json({ ok: true });
 }));
@@ -199,13 +202,18 @@ r.get('/revenue', wrap((req, res) => {
   const months = Math.min(parseInt(req.query.months) || 7, 24);
   const thaiMon = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   const rows = [];
+  const now = new Date();
   for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+    // Use UTC consistently. paid_at, the dashboard KPI and /summary all group by the UTC
+    // year-month (today() is UTC). Building the month from a LOCAL-midnight date and then
+    // toISOString() shifted `ym` back a month in UTC+7 while `label` stayed local — so in
+    // Thailand every bar showed the wrong month and the current month read ฿0.
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
     const ym = d.toISOString().slice(0, 7); // YYYY-MM
     const rev = get(
       `SELECT COALESCE(SUM(amount),0) t FROM invoices WHERE school_id=? AND status='paid' AND substr(paid_at,1,7)=?`,
       sid, ym).t;
-    rows.push({ month: ym, label: thaiMon[d.getMonth()], revenue: rev });
+    rows.push({ month: ym, label: thaiMon[d.getUTCMonth()], revenue: rev });
   }
   res.json(rows);
 }));
