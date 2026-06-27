@@ -54,6 +54,7 @@
 
     /* ---- Read ---- */
     dashboard: function ()     { return req('/api/dashboard'); },
+    analytics: function (months, horizon) { return req('/api/dashboard/analytics?months=' + (months||12) + '&horizon=' + (horizon||3)); },
     students:  function (q)    { return req('/api/students'  + (q ? '?' + new URLSearchParams(q) : '')); },
     teachers:  function ()     { return req('/api/teachers'); },
     packages:  function ()     { return req('/api/packages'); },

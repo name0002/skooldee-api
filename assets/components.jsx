@@ -105,6 +105,56 @@ function BarChart({ data, height=120, color="var(--primary)" }){
 }
 window.BarChart = BarChart;
 
+/* Bar chart that shows historical months (solid) plus forecast months (dashed/striped).
+ * history: [{ym,v,partial}]  ·  forecast: [{ym,v,lo,hi}] (future months, current-month dup already dropped by caller)
+ * `fmt` formats the tooltip value. Shows the last 8 history months to stay readable. */
+function ForecastChart({ history, forecast, color="var(--primary)", height=160, fmt }){
+  fmt = fmt || (v=>v);
+  const THMON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const lbl = ym => THMON[Number(String(ym).slice(5,7))-1] || '';
+  const hist = (history||[]).slice(-8).map(h=>({ ...h, kind: h.partial?'partial':'actual' }));
+  const fut  = (forecast||[]).map(f=>({ ...f, kind:'forecast' }));
+  const bars = hist.concat(fut);
+  const max = Math.max(1, ...bars.map(b=> b.kind==='forecast' ? (b.hi||b.v) : b.v));
+  return (
+    <div style={{ display:"flex", alignItems:"flex-end", gap:6, height }}>
+      {bars.map((b,i)=>{
+        const h = (b.v/max)*100, isF = b.kind==='forecast', isP = b.kind==='partial';
+        return (
+          <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:6, height:"100%", justifyContent:"flex-end" }}>
+            <div title={fmt(b.v)+(isF?' (คาดการณ์)':isP?' (ยังไม่จบเดือน)':'')} style={{
+              width:"100%", maxWidth:30, height:Math.max(2,h)+"%", borderRadius:"6px 6px 2px 2px",
+              background: isF ? "color-mix(in oklch, "+color+" 10%, white)" : (isP ? "color-mix(in oklch, "+color+" 45%, white)" : color),
+              border: isF ? "1.5px dashed "+color : "none",
+              transition:"height .5s cubic-bezier(.2,.7,.3,1)" }}></div>
+            <span style={{ fontSize:10.5, color:"var(--text-3)", fontWeight:(isP||isF)?700:500 }}>{lbl(b.ym)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+window.ForecastChart = ForecastChart;
+
+/* One-line forecast summary: this-month projection, next month, monthly trend %. */
+function ForecastCaption({ fc, fmt }){
+  if(!fc || !fc.points || !fc.points.length) return null;
+  fmt = fmt || (v=>v);
+  const cur = fc.points[0], next = fc.points[1];
+  const up = (fc.trend_pct||0) >= 0;
+  return (
+    <div style={{ marginTop:12, display:"flex", flexWrap:"wrap", gap:14, alignItems:"center", fontSize:13 }}>
+      {cur && <span style={{ color:"var(--text-2)" }}>เดือนนี้คาดถึง <b style={{ color:"var(--text)" }}>{fmt(cur.v)}</b></span>}
+      {next && <span style={{ color:"var(--text-2)" }}>เดือนหน้า ~<b style={{ color:"var(--text)" }}>{fmt(next.v)}</b></span>}
+      <span style={{ color: up?"var(--ok)":"var(--danger)", fontWeight:700, display:"inline-flex", alignItems:"center", gap:3 }}>
+        <Icon n={up?"trendUp":"trendDown"} size={14}/>{up?"+":""}{fc.trend_pct}%/เดือน
+      </span>
+      {!fc.reliable && <span style={{ fontSize:11.5, color:"var(--text-3)" }}>· ข้อมูลยังน้อย คาดการณ์คร่าวๆ</span>}
+    </div>
+  );
+}
+window.ForecastCaption = ForecastCaption;
+
 /* ---- donut (pure CSS conic) ---- */
 function Donut({ segments, size=140 }){
   const total = segments.reduce((a,s)=>a+s.v,0);

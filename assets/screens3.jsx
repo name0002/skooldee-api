@@ -283,6 +283,11 @@ function downloadCsv(filename, rows){
 function Reports(){
   useDataVersion();
   const [toast, showToast] = useToast();
+  const [analytics, setAnalytics] = useState(null);
+  useEffect(()=>{
+    if(!DATA._isLiveMode || !window.API || !window.API.analytics) return;
+    window.API.analytics(12, 3).then(setAnalytics).catch(()=>{});
+  }, []);
   const revLen = DATA.REVENUE.length;
   const [selMonthIdx, setSelMonthIdx] = useState(revLen>0 ? revLen-1 : 0);
   // clamp if data was updated
@@ -364,10 +369,27 @@ function Reports(){
 
       <div style={{ display:"grid", gridTemplateColumns:"1.5fr 1fr", gap:18, alignItems:"start" }} className="dash-cols">
         <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
-          <div className="card card-pad">
-            <SectionHead title="แนวโน้มรายได้ 7 เดือน"/>
-            <BarChart data={DATA.REVENUE} height={150} color="var(--primary)"/>
-          </div>
+          {DATA._isLiveMode && analytics ? (
+            <>
+              {analytics.revenue && (
+                <div className="card card-pad">
+                  <SectionHead title="แนวโน้มรายได้ + คาดการณ์"/>
+                  <ForecastChart history={analytics.revenue.history} forecast={analytics.revenue.forecast.points.slice(1)} color="var(--primary)" fmt={DATA.baht}/>
+                  <ForecastCaption fc={analytics.revenue.forecast} fmt={DATA.baht}/>
+                </div>
+              )}
+              <div className="card card-pad">
+                <SectionHead title="นักเรียนใหม่ + คาดการณ์"/>
+                <ForecastChart history={analytics.new_students.history} forecast={analytics.new_students.forecast.points.slice(1)} color="var(--c-piano)" fmt={v=>v+" คน"}/>
+                <ForecastCaption fc={analytics.new_students.forecast} fmt={v=>v+" คน"}/>
+              </div>
+            </>
+          ) : (
+            <div className="card card-pad">
+              <SectionHead title="แนวโน้มรายได้ 7 เดือน"/>
+              <BarChart data={DATA.REVENUE} height={150} color="var(--primary)"/>
+            </div>
+          )}
 
           <PayrollSection showToast={showToast}/>
         </div>
