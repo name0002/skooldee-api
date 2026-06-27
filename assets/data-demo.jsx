@@ -166,22 +166,29 @@ const RECIPIENT_TYPES = [
   { key:'relative',label:'ญาติ/อื่นๆ' },
 ];
 // คำนำหน้าเวลาเรียกผู้เรียน — ให้โรงเรียนเลือกเองได้ (override การเดาจากอายุ)
+// คุณพ่อ/คุณแม่ เป็นคำนำหน้าของ "ผู้ปกครอง" ที่รับข้อความ ไม่ใช่ของผู้เรียน — ใช้ตอน
+// recipient เป็น parent เพื่อระบุว่าจะเรียกใครโดยเฉพาะ แทนคำกลาง "คุณพ่อคุณแม่"
 const HONORIFICS = [
-  { key:'auto', label:'อัตโนมัติ (ตามอายุ)' },
-  { key:'น้อง', label:'น้อง' },
-  { key:'พี่',  label:'พี่' },
-  { key:'คุณ',  label:'คุณ' },
+  { key:'auto',    label:'อัตโนมัติ (ตามอายุ)' },
+  { key:'น้อง',    label:'น้อง' },
+  { key:'พี่',     label:'พี่' },
+  { key:'คุณ',     label:'คุณ' },
+  { key:'คุณพ่อ', label:'คุณพ่อ' },
+  { key:'คุณแม่', label:'คุณแม่' },
 ];
+const LEARNER_HONORIFICS = ['น้อง','พี่','คุณ'];
+const PARENT_HONORIFICS = ['คุณพ่อ','คุณแม่'];
 // age tunes the honorific: an adult learner is "คุณ", a child is "น้อง" — never call a
 // 46-year-old "น้อง". When age is unknown we fall back to "น้อง" for guardian-style
 // contacts (parent/sibling/relative, usually a child) and "คุณ" for self-learners.
-// `honorific` ('น้อง'|'พี่'|'คุณ') overrides that guess when the school picks a tone.
+// `honorific` overrides that guess for the LEARNER ('น้อง'|'พี่'|'คุณ'), or names the
+// PARENT directly ('คุณพ่อ'|'คุณแม่') for a parent-type recipient — independent knobs.
 const recipientWords = (type, name, age, honorific)=>{
   const n = name||'';
   const a = Number(age);
   const known = Number.isFinite(a) && a>0;
   const ageAdult = known ? a>=18 : (type==='self');
-  const h = ['น้อง','พี่','คุณ'].includes(honorific) ? honorific : (ageAdult?'คุณ':'น้อง');
+  const h = LEARNER_HONORIFICS.includes(honorific) ? honorific : (ageAdult?'คุณ':'น้อง');
   const adult = h!=='น้อง';                          // anyone not "น้อง" gets grown-up tone
   const ref = `${h}${n}`;                            // third-person name for the learner
   const supervise = adult                            // closing ask, tuned to the learner's age
@@ -191,8 +198,11 @@ const recipientWords = (type, name, age, honorific)=>{
     case 'self':     return { greet:ref, studentRef:ref, care:'รบกวนฝึกซ้อมตามนี้ด้วยนะคะ 😊', isSelf:true };
     case 'sibling':  return { greet:`พี่ของ${ref}`, studentRef:ref, care:supervise, isSelf:false };
     case 'relative': return { greet:`ครอบครัวของ${ref}`, studentRef:ref, care:supervise, isSelf:false };
-    default:         return { greet:`คุณพ่อคุณแม่ของ${ref}`, studentRef:ref,
-                              care:adult?supervise:`รบกวนผู้ปกครองช่วยดูแล${ref}ฝึกด้วยนะคะ 😊`, isSelf:false };
+    default: {
+      const parent = PARENT_HONORIFICS.includes(honorific) ? honorific : 'คุณพ่อคุณแม่';
+      return { greet:`${parent}ของ${ref}`, studentRef:ref,
+        care:adult?supervise:`รบกวน${parent}ช่วยดูแล${ref}ฝึกด้วยนะคะ 😊`, isSelf:false };
+    }
   }
 };
 

@@ -74,14 +74,19 @@ export function nearLimitInfo(student, threshold) {
 //   isSelf     — the learner receives their own messages (address directly, no "น้อง")
 // `age` tunes the honorific: an adult learner is "คุณ", a child is "น้อง" — never call a
 // 46-year-old "น้อง". Unknown age falls back to "น้อง" for guardian-style contacts and
-// "คุณ" for self-learners. `honorific` ('น้อง' | 'พี่' | 'คุณ') overrides the age guess
-// when the school wants a specific tone (e.g. address an adult as "พี่", not "คุณ").
+// "คุณ" for self-learners. `honorific` overrides the age guess for the LEARNER ('น้อง' |
+// 'พี่' | 'คุณ') — e.g. address an adult as "พี่", not "คุณ". It can also name the PARENT
+// directly ('คุณพ่อ' | 'คุณแม่') for a parent-type recipient, replacing the generic
+// "คุณพ่อคุณแม่" — these two are independent: which parent is greeted doesn't change
+// whether the learner (named in the message body) is a "น้อง" or a "คุณ".
+const LEARNER_HONORIFICS = ['น้อง', 'พี่', 'คุณ'];
+const PARENT_HONORIFICS = ['คุณพ่อ', 'คุณแม่'];
 export function recipientWords(type, name, age, honorific) {
   const n = name || '';
   const a = Number(age);
   const known = Number.isFinite(a) && a > 0;
   const ageAdult = known ? a >= 18 : type === 'self';
-  const h = ['น้อง', 'พี่', 'คุณ'].includes(honorific) ? honorific : (ageAdult ? 'คุณ' : 'น้อง');
+  const h = LEARNER_HONORIFICS.includes(honorific) ? honorific : (ageAdult ? 'คุณ' : 'น้อง');
   const adult = h !== 'น้อง';                          // anyone not "น้อง" gets grown-up tone
   const ref = `${h}${n}`;                              // third-person name for the learner
   const supervise = adult                              // closing ask, tuned to the learner's age
@@ -95,8 +100,10 @@ export function recipientWords(type, name, age, honorific) {
     case 'relative':
       return { greet: `ครอบครัวของ${ref}`, studentRef: ref, care: supervise, isSelf: false };
     case 'parent':
-    default:
-      return { greet: `คุณพ่อคุณแม่ของ${ref}`, studentRef: ref,
-        care: adult ? supervise : `รบกวนผู้ปกครองช่วยดูแล${ref}ฝึกด้วยนะคะ 😊`, isSelf: false };
+    default: {
+      const parent = PARENT_HONORIFICS.includes(honorific) ? honorific : 'คุณพ่อคุณแม่';
+      return { greet: `${parent}ของ${ref}`, studentRef: ref,
+        care: adult ? supervise : `รบกวน${parent}ช่วยดูแล${ref}ฝึกด้วยนะคะ 😊`, isSelf: false };
+    }
   }
 }

@@ -543,7 +543,7 @@ function StudentDrawer({ s, onClose }){
             </div>
           </div>
           <div className="field">
-            <label>คำเรียกผู้เรียน <span style={{fontSize:11,color:'var(--muted)'}}>เช่น เรียก "พี่" หรือ "คุณ" สำหรับผู้ใหญ่</span></label>
+            <label>คำเรียกผู้เรียน/ผู้ปกครอง <span style={{fontSize:11,color:'var(--muted)'}}>เช่น เรียก "พี่"/"คุณ" สำหรับผู้ใหญ่ หรือ "คุณพ่อ"/"คุณแม่" เจาะจงผู้ปกครอง</span></label>
             <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
               {(DATA.HONORIFICS||[]).map(ho=>(
                 <button key={ho.key} type="button" className={"chip"+((f.honorific||'auto')===ho.key?" active":"")} onClick={()=>set('honorific',ho.key)}>{ho.label}</button>
