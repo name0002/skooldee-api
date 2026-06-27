@@ -25,7 +25,7 @@ import enrollments from './routes/enrollments.js';
 import stripeRoutes from './routes/stripe.js';
 import adminRoutes from './routes/admin.js';
 import richMenu from './routes/richmenu.js';
-import chat from './routes/chat.js';
+// import chat from './routes/chat.js'; // disabled: chat.js/anthropic.js/rateLimit.js aren't committed yet — re-enable once they land
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
@@ -53,7 +53,7 @@ export function createApp() {
   // Stripe: webhook is public; create-checkout and portal use requireAuth inline
   app.use('/api/stripe', stripeRoutes);
   // chat: /public is open (landing FAQ); /help applies requireAuth itself (app help)
-  app.use('/api/chat', chat);
+  // app.use('/api/chat', chat); // disabled — see import comment above
 
   // everything below requires a valid JWT and is automatically scoped to the
   // authenticated user's school (req.schoolId) — the multi-tenant boundary.
