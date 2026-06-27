@@ -25,6 +25,7 @@ function Settings({ go }){
       {/* tabs */}
       <div style={{ display:'flex', gap:8, marginBottom:28, flexWrap:'wrap' }}>
         {tab('school',     '🏫 ข้อมูลโรงเรียน')}
+        {tab('goals',      '🎯 เป้าหมายธุรกิจ')}
         {tab('categories', '🎨 ประเภทวิชา')}
         {tab('assess',     '📊 เกณฑ์ประเมิน')}
         {tab('staffeval',  '📋 ประเมินบุคลากร')}
@@ -38,6 +39,7 @@ function Settings({ go }){
       </div>
 
       {section==='school'      && <SchoolSettingsSection showToast={showToast}/>}
+      {section==='goals'       && <GoalsSettingsSection showToast={showToast}/>}
       {section==='categories'  && <CategoriesSettingsSection showToast={showToast}/>}
       {section==='assess'      && <AssessmentSettingsSection showToast={showToast}/>}
       {section==='staffeval'   && <StaffEvalSettingsSection showToast={showToast}/>}
@@ -319,6 +321,73 @@ function SchoolSettingsSection({ showToast }){
         <button type="submit" className="btn btn-primary" disabled={busy}
           style={{ padding:'11px 28px', fontSize:14.5, fontWeight:700 }}>
           {busy ? 'กำลังบันทึก…' : 'บันทึกการเปลี่ยนแปลง'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/* ===================== Business Goals Settings ===================== */
+function GoalsSettingsSection({ showToast }){
+  useDataVersion();
+  const inp = useInpStyle();
+  const fromSchool = ()=>{
+    const g = (DATA._schoolRaw || {}).goals || {};
+    return {
+      revenue_monthly:      g.revenue_monthly || '',
+      new_students_monthly: g.new_students_monthly || '',
+      active_students:      g.active_students || '',
+    };
+  };
+  const [f, setF] = useState(fromSchool);
+  const [busy, setBusy] = useState(false);
+  const syncedRef = React.useRef(null);
+  const schoolId = (DATA._schoolRaw || {}).id;
+  if(schoolId && schoolId !== syncedRef.current){ syncedRef.current = schoolId; setF(fromSchool()); }
+
+  const set = (k, v)=> setF(p=>({ ...p, [k]: v.replace(/[^0-9]/g,'') }));
+
+  const save = async(e)=>{
+    e.preventDefault();
+    if(!DATA.updateSchool){ showToast('ใช้ได้เฉพาะ Live mode','error'); return; }
+    setBusy(true);
+    try{
+      const updated = await DATA.updateSchool({ goals: {
+        revenue_monthly:      Number(f.revenue_monthly) || 0,
+        new_students_monthly: Number(f.new_students_monthly) || 0,
+        active_students:      Number(f.active_students) || 0,
+      }});
+      if(updated && updated.goals) DATA._schoolRaw = { ...DATA._schoolRaw, goals: updated.goals };
+      bumpData();
+      showToast('บันทึกเป้าหมายแล้ว ✓');
+    } catch(ex){ showToast(ex.message||'เกิดข้อผิดพลาด','error'); }
+    setBusy(false);
+  };
+
+  const field = (k, label, unit, placeholder)=>(
+    <div>
+      <label style={{ display:'block', fontWeight:600, fontSize:13, marginBottom:6 }}>{label}</label>
+      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+        <input style={{ ...inp, width:160, textAlign:'right' }} inputMode="numeric"
+          value={f[k]} onChange={e=>set(k, e.target.value)} placeholder={placeholder}/>
+        <span style={{ fontSize:13, color:'var(--text-2)' }}>{unit}</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <form onSubmit={save}>
+      <SettingsCard title="เป้าหมายธุรกิจ" sub="ตั้งเป้าของคุณเอง แล้วระบบจะแสดงความคืบหน้าเทียบเป้า + คาดการณ์ว่าจะถึงเป้าไหม ในหน้ารายงาน (เว้นว่างหรือใส่ 0 = ไม่ตั้งเป้า)">
+        <div style={{ display:'grid', gap:18 }}>
+          {field('revenue_monthly',      'เป้ารายได้ต่อเดือน',        'บาท/เดือน', 'เช่น 40000')}
+          {field('new_students_monthly', 'เป้านักเรียนใหม่ต่อเดือน',   'คน/เดือน',  'เช่น 8')}
+          {field('active_students',      'เป้าจำนวนนักเรียนรวม (active)', 'คน',        'เช่น 60')}
+        </div>
+      </SettingsCard>
+      <div style={{ display:'flex', justifyContent:'flex-end' }}>
+        <button type="submit" className="btn btn-primary" disabled={busy}
+          style={{ padding:'11px 28px', fontSize:14.5, fontWeight:700 }}>
+          {busy ? 'กำลังบันทึก…' : 'บันทึกเป้าหมาย'}
         </button>
       </div>
     </form>

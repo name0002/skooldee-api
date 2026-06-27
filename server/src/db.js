@@ -443,6 +443,9 @@ export function initSchema() {
   addCol('ALTER TABLE schools ADD COLUMN payso_link TEXT');
   // lets a school show the QR but disable the in-portal slip-upload flow (manual confirmation instead)
   addCol("ALTER TABLE schools ADD COLUMN slip_enabled INTEGER NOT NULL DEFAULT 1");
+  // owner-set business targets, shown against the analytics/forecast on the Reports page.
+  // JSON: { revenue_monthly, new_students_monthly, active_students } — 0/absent = not set.
+  addCol('ALTER TABLE schools ADD COLUMN goals_json TEXT');
   // backfill existing leads: the sign-up lead shares the owner's email → resolve its school
   try {
     run(`UPDATE leads SET school_id = (

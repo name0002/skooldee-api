@@ -105,32 +105,49 @@ function BarChart({ data, height=120, color="var(--primary)" }){
 }
 window.BarChart = BarChart;
 
-/* Bar chart that shows historical months (solid) plus forecast months (dashed/striped).
+/* Bar chart that shows historical months (solid) plus forecast months (dashed/striped),
+ * with an optional owner target drawn as a horizontal goal line.
  * history: [{ym,v,partial}]  ·  forecast: [{ym,v,lo,hi}] (future months, current-month dup already dropped by caller)
- * `fmt` formats the tooltip value. Shows the last 8 history months to stay readable. */
-function ForecastChart({ history, forecast, color="var(--primary)", height=160, fmt }){
+ * `fmt` formats the tooltip value. `goal` (number|null) draws the target line. Shows the
+ * last 8 history months to stay readable. Bars and labels are separate rows so the goal
+ * line's % position lines up exactly with the bar tops. */
+function ForecastChart({ history, forecast, color="var(--primary)", height=160, fmt, goal }){
   fmt = fmt || (v=>v);
   const THMON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   const lbl = ym => THMON[Number(String(ym).slice(5,7))-1] || '';
   const hist = (history||[]).slice(-8).map(h=>({ ...h, kind: h.partial?'partial':'actual' }));
   const fut  = (forecast||[]).map(f=>({ ...f, kind:'forecast' }));
   const bars = hist.concat(fut);
-  const max = Math.max(1, ...bars.map(b=> b.kind==='forecast' ? (b.hi||b.v) : b.v));
+  const g = goal>0 ? goal : 0;
+  const max = Math.max(1, g, ...bars.map(b=> b.kind==='forecast' ? (b.hi||b.v) : b.v));
   return (
-    <div style={{ display:"flex", alignItems:"flex-end", gap:6, height }}>
-      {bars.map((b,i)=>{
-        const h = (b.v/max)*100, isF = b.kind==='forecast', isP = b.kind==='partial';
-        return (
-          <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:6, height:"100%", justifyContent:"flex-end" }}>
-            <div title={fmt(b.v)+(isF?' (คาดการณ์)':isP?' (ยังไม่จบเดือน)':'')} style={{
-              width:"100%", maxWidth:30, height:Math.max(2,h)+"%", borderRadius:"6px 6px 2px 2px",
-              background: isF ? "color-mix(in oklch, "+color+" 10%, white)" : (isP ? "color-mix(in oklch, "+color+" 45%, white)" : color),
-              border: isF ? "1.5px dashed "+color : "none",
-              transition:"height .5s cubic-bezier(.2,.7,.3,1)" }}></div>
-            <span style={{ fontSize:10.5, color:"var(--text-3)", fontWeight:(isP||isF)?700:500 }}>{lbl(b.ym)}</span>
+    <div>
+      <div style={{ position:"relative", height }}>
+        <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:"100%" }}>
+          {bars.map((b,i)=>{
+            const h = (b.v/max)*100, isF = b.kind==='forecast', isP = b.kind==='partial';
+            return (
+              <div key={i} style={{ flex:1, display:"flex", alignItems:"flex-end", justifyContent:"center", height:"100%" }}>
+                <div title={fmt(b.v)+(isF?' (คาดการณ์)':isP?' (ยังไม่จบเดือน)':'')} style={{
+                  width:"100%", maxWidth:30, height:Math.max(2,h)+"%", borderRadius:"6px 6px 2px 2px",
+                  background: isF ? "color-mix(in oklch, "+color+" 10%, white)" : (isP ? "color-mix(in oklch, "+color+" 45%, white)" : color),
+                  border: isF ? "1.5px dashed "+color : "none",
+                  transition:"height .5s cubic-bezier(.2,.7,.3,1)" }}></div>
+              </div>
+            );
+          })}
+        </div>
+        {g>0 && (
+          <div style={{ position:"absolute", left:0, right:0, bottom:((g/max)*100)+"%", borderTop:"1.5px dashed var(--warn)", pointerEvents:"none" }}>
+            <span style={{ position:"absolute", right:0, top:-8, fontSize:10, fontWeight:700, color:"var(--warn)", background:"var(--surface)", padding:"0 4px", lineHeight:"16px" }}>เป้า {fmt(g)}</span>
           </div>
-        );
-      })}
+        )}
+      </div>
+      <div style={{ display:"flex", gap:6, marginTop:6 }}>
+        {bars.map((b,i)=>(
+          <span key={i} style={{ flex:1, textAlign:"center", fontSize:10.5, color:"var(--text-3)", fontWeight:(b.kind!=='actual')?700:500 }}>{lbl(b.ym)}</span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -154,6 +171,40 @@ function ForecastCaption({ fc, fmt }){
   );
 }
 window.ForecastCaption = ForecastCaption;
+
+/* Progress toward an owner-set target. `current` = value so far this month; `projected`
+ * (optional) = the model's end-of-month estimate. The end-of-month value can only be ≥
+ * what's already happened, so the verdict uses max(current, projected) — that avoids a
+ * "100% but will fall short" contradiction when the month already beat the trend.
+ * Renders nothing when no goal is set. */
+function GoalProgress({ label, current, projected, goal, fmt }){
+  if(!goal || goal<=0) return null;
+  fmt = fmt || (v=>v);
+  const pct = Math.max(0, Math.min(100, Math.round((current/goal)*100)));
+  const achieved = current >= goal;
+  const end = projected!=null ? Math.max(current, projected) : current;
+  const onTrack = end >= goal;
+  const color = onTrack ? "var(--ok)" : "var(--warn)";
+  return (
+    <div style={{ marginTop:12 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", fontSize:12.5, marginBottom:5 }}>
+        <span style={{ color:"var(--text-2)" }}>{label}</span>
+        <span><b style={{ color:"var(--text)" }}>{fmt(current)}</b> <span style={{ color:"var(--text-3)" }}>/ {fmt(goal)} ({pct}%)</span></span>
+      </div>
+      <div style={{ height:8, borderRadius:99, background:"var(--surface-2)", overflow:"hidden" }}>
+        <div style={{ height:"100%", width:pct+"%", background:color, borderRadius:99, transition:"width .5s cubic-bezier(.2,.7,.3,1)" }}/>
+      </div>
+      {(achieved || projected!=null) && (
+        <div style={{ fontSize:11.5, marginTop:5, color, fontWeight:600 }}>
+          {achieved ? "✓ ถึงเป้าแล้ว"
+            : onTrack ? "✓ คาดว่าจะถึงเป้าสิ้นเดือน (" + fmt(end) + ")"
+            : "⚠ คาดว่าจะต่ำกว่าเป้า (" + fmt(end) + ")"}
+        </div>
+      )}
+    </div>
+  );
+}
+window.GoalProgress = GoalProgress;
 
 /* ---- donut (pure CSS conic) ---- */
 function Donut({ segments, size=140 }){

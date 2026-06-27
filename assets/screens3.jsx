@@ -374,15 +374,31 @@ function Reports(){
               {analytics.revenue && (
                 <div className="card card-pad">
                   <SectionHead title="แนวโน้มรายได้ + คาดการณ์"/>
-                  <ForecastChart history={analytics.revenue.history} forecast={analytics.revenue.forecast.points.slice(1)} color="var(--primary)" fmt={DATA.baht}/>
+                  <ForecastChart history={analytics.revenue.history} forecast={analytics.revenue.forecast.points.slice(1)} goal={analytics.revenue.goal} color="var(--primary)" fmt={DATA.baht}/>
                   <ForecastCaption fc={analytics.revenue.forecast} fmt={DATA.baht}/>
+                  <GoalProgress label="รายได้เดือนนี้เทียบเป้า"
+                    current={(analytics.revenue.history[analytics.revenue.history.length-1]||{}).v||0}
+                    projected={(analytics.revenue.forecast.points[0]||{}).v}
+                    goal={analytics.revenue.goal} fmt={DATA.baht}/>
                 </div>
               )}
               <div className="card card-pad">
                 <SectionHead title="นักเรียนใหม่ + คาดการณ์"/>
-                <ForecastChart history={analytics.new_students.history} forecast={analytics.new_students.forecast.points.slice(1)} color="var(--c-piano)" fmt={v=>v+" คน"}/>
+                <ForecastChart history={analytics.new_students.history} forecast={analytics.new_students.forecast.points.slice(1)} goal={analytics.new_students.goal} color="var(--c-piano)" fmt={v=>v+" คน"}/>
                 <ForecastCaption fc={analytics.new_students.forecast} fmt={v=>v+" คน"}/>
+                <GoalProgress label="นักเรียนใหม่เดือนนี้เทียบเป้า"
+                  current={(analytics.new_students.history[analytics.new_students.history.length-1]||{}).v||0}
+                  projected={(analytics.new_students.forecast.points[0]||{}).v}
+                  goal={analytics.new_students.goal} fmt={v=>v+" คน"}/>
               </div>
+              {analytics.active_students && analytics.active_students.goal>0 && (
+                <div className="card card-pad">
+                  <SectionHead title="นักเรียนที่กำลังเรียน"/>
+                  <GoalProgress label="จำนวนนักเรียน active เทียบเป้า"
+                    current={analytics.active_students.current||0}
+                    goal={analytics.active_students.goal} fmt={v=>v+" คน"}/>
+                </div>
+              )}
             </>
           ) : (
             <div className="card card-pad">

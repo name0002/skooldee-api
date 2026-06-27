@@ -138,6 +138,11 @@ r.get('/analytics', wrap((req, res) => {
 
   const canSeeRevenue = pageAllows(req.perms, 'finance', 'view');
 
+  // owner-set monthly targets (0 = not set)
+  let goals = {};
+  try { goals = JSON.parse((get('SELECT goals_json FROM schools WHERE id = ?', sid) || {}).goals_json || '{}') || {}; } catch { goals = {}; }
+  const goal = (k) => Math.max(0, Math.round(Number(goals[k]) || 0)) || null;
+
   let revenue = null;
   if (canSeeRevenue) {
     const rows = all(
@@ -145,16 +150,21 @@ r.get('/analytics', wrap((req, res) => {
          FROM invoices WHERE school_id = ? AND status = 'paid' AND paid_at IS NOT NULL
          GROUP BY ym`, sid);
     const hist = bucket(rows);
-    revenue = { history: hist, forecast: buildForecast(hist) };
+    revenue = { history: hist, forecast: buildForecast(hist), goal: goal('revenue_monthly') };
   }
 
   const studRows = all(
     `SELECT substr(created_at,1,7) AS ym, COUNT(*) AS v
        FROM students WHERE school_id = ? GROUP BY ym`, sid);
   const studHist = bucket(studRows);
-  const newStudents = { history: studHist, forecast: buildForecast(studHist) };
+  const newStudents = { history: studHist, forecast: buildForecast(studHist), goal: goal('new_students_monthly') };
 
-  res.json({ months, horizon, can_see_revenue: canSeeRevenue, revenue, new_students: newStudents });
+  // active students is a point-in-time count (not a monthly flow), so it carries its
+  // own current value + target rather than a forecast series.
+  const activeNow = get("SELECT COUNT(*) AS c FROM students WHERE school_id = ? AND status = 'active'", sid).c;
+  const activeStudents = { current: activeNow, goal: goal('active_students') };
+
+  res.json({ months, horizon, can_see_revenue: canSeeRevenue, revenue, new_students: newStudents, active_students: activeStudents });
 }));
 
 export default r;
