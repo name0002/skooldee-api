@@ -52,6 +52,17 @@ r.patch('/', requireRole('owner', 'admin'), wrap((req, res) => {
     sets.push('categories_json = ?');
     vals.push(categories_json === null ? null : JSON.stringify(categories_json));
   }
+  // SECURITY: a LINE token without a channel secret leaves the webhook unauthenticated
+  // (see line.js). Reject any change that would leave a token configured with no secret,
+  // computing the resulting state from the current row + this request (the secret is never
+  // sent back to the client, so a token-only PATCH must fall back to the stored secret).
+  if (line_token !== undefined || line_secret !== undefined) {
+    const cur = get('SELECT line_token, line_secret FROM schools WHERE id = ?', req.schoolId) || {};
+    const clean = (v) => (v === null || String(v).trim() === '') ? null : String(v).trim();
+    const nextToken = line_token !== undefined ? clean(line_token) : cur.line_token;
+    const nextSecret = line_secret !== undefined ? clean(line_secret) : cur.line_secret;
+    if (nextToken && !nextSecret) throw bad('ต้องตั้ง Channel Secret คู่กับ Channel Access Token เพื่อความปลอดภัยของการเชื่อมต่อ LINE');
+  }
   if (line_token !== undefined) {
     // empty string clears the token; otherwise store trimmed value
     const t = (line_token === null || String(line_token).trim() === '') ? null : String(line_token).trim();

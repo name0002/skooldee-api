@@ -12,6 +12,12 @@ const API_KEY   = process.env.RESEND_API_KEY;
 const FROM_ADDR = process.env.EMAIL_FROM || 'skooldee <noreply@skooldee.com>';
 const BRAND_LOGO = 'https://skooldee.com/favicon.svg';
 
+// Escape user-supplied values before interpolating into HTML email bodies. Public forms
+// (enroll, lead, signup) feed these, so unescaped input would let an anonymous attacker
+// inject markup/phishing links into a school owner's inbox.
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 export const emailEnabled = !!API_KEY && !API_KEY.startsWith('PLACEHOLDER');
 
 export async function sendEmail({ to, subject, html, text }) {
@@ -37,8 +43,8 @@ export function tplWelcome({ schoolName, ownerName, loginUrl = 'https://skooldee
     html: `
 <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
   <div style="font-size:22px;font-weight:700;margin-bottom:8px">🎉 บัญชีของคุณพร้อมแล้ว!</div>
-  <p>สวัสดีคุณ${ownerName},</p>
-  <p><b>${schoolName}</b> ลงทะเบียนกับ skooldee สำเร็จแล้ว ทดลองใช้ได้ฟรี 14 วัน</p>
+  <p>สวัสดีคุณ${esc(ownerName)},</p>
+  <p><b>${esc(schoolName)}</b> ลงทะเบียนกับ skooldee สำเร็จแล้ว ทดลองใช้ได้ฟรี 14 วัน</p>
   <a href="${loginUrl}" style="display:inline-block;margin:20px 0;padding:12px 28px;background:#009488;color:#fff;border-radius:10px;text-decoration:none;font-weight:700">
     เข้าสู่ระบบ skooldee →
   </a>
@@ -55,7 +61,7 @@ export function tplPasswordReset({ email, resetUrl }) {
     html: `
 <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
   <div style="font-size:20px;font-weight:700;margin-bottom:8px">🔐 รีเซ็ตรหัสผ่าน</div>
-  <p>เราได้รับคำขอรีเซ็ตรหัสผ่านสำหรับบัญชี <b>${email}</b></p>
+  <p>เราได้รับคำขอรีเซ็ตรหัสผ่านสำหรับบัญชี <b>${esc(email)}</b></p>
   <p>กดปุ่มด้านล่างเพื่อตั้งรหัสผ่านใหม่ (ลิงก์หมดอายุใน 1 ชั่วโมง)</p>
   <a href="${resetUrl}" style="display:inline-block;margin:20px 0;padding:12px 28px;background:#009488;color:#fff;border-radius:10px;text-decoration:none;font-weight:700">
     ตั้งรหัสผ่านใหม่ →
@@ -81,11 +87,11 @@ export function tplNewEnrollment({ schoolName, studentName, parentName, phone, l
     html: `
 <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
   <div style="font-size:20px;font-weight:700;margin-bottom:6px">🎓 มีผู้สมัครเรียนใหม่!</div>
-  <p style="color:#555;margin-bottom:18px"><b>${schoolName}</b> ได้รับใบสมัครเรียนใหม่ผ่านหน้าสมัครออนไลน์</p>
+  <p style="color:#555;margin-bottom:18px"><b>${esc(schoolName)}</b> ได้รับใบสมัครเรียนใหม่ผ่านหน้าสมัครออนไลน์</p>
   <table style="width:100%;border-collapse:collapse">
     ${rows.map(([k, v]) => `
     <tr><td style="padding:8px 12px;background:#f9f9f9;font-weight:600;border-bottom:1px solid #eee;width:32%">${k}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee">${v}</td></tr>`).join('')}
+        <td style="padding:8px 12px;border-bottom:1px solid #eee">${esc(v)}</td></tr>`).join('')}
   </table>
   <a href="${adminUrl}" style="display:inline-block;margin:22px 0 8px;padding:12px 28px;background:#009488;color:#fff;border-radius:10px;text-decoration:none;font-weight:700">
     ดูใบสมัคร & รับเข้าเรียน →
@@ -106,7 +112,7 @@ export function tplNewLead({ school, name, email, phone, category, plan }) {
   <table style="width:100%;border-collapse:collapse">
     ${[['โรงเรียน',school],['ชื่อ',name],['อีเมล',email],['เบอร์',phone||'-'],['ประเภท',category||'-'],['แผน',plan||'-']].map(([k,v])=>`
     <tr><td style="padding:8px 12px;background:#f9f9f9;font-weight:600;border-bottom:1px solid #eee;width:30%">${k}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee">${v}</td></tr>`).join('')}
+        <td style="padding:8px 12px;border-bottom:1px solid #eee">${esc(v)}</td></tr>`).join('')}
   </table>
   <a href="https://skooldee.com/admin" style="display:inline-block;margin:20px 0;padding:10px 22px;background:#009488;color:#fff;border-radius:8px;text-decoration:none;font-weight:700">
     ดูใน Admin →

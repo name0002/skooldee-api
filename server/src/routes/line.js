@@ -22,12 +22,15 @@ r.post('/webhook/:schoolId', async (req, res) => {
   const school = get('SELECT line_token, line_secret, line_welcome_enabled, line_welcome_message, owner_link_code FROM schools WHERE id = ?', sid);
   if (!school) return res.sendStatus(404);
 
-  // verify LINE signature if a channel secret is configured (recommended)
-  if (school.line_secret && req.rawBody) {
-    const expected = crypto.createHmac('sha256', school.line_secret).update(req.rawBody).digest('base64');
-    const got = req.get('X-Line-Signature') || '';
-    if (expected !== got) return res.sendStatus(403);
-  }
+  // SECURITY: every webhook event MUST carry a valid LINE signature. Without a channel
+  // secret we cannot authenticate the caller, so we refuse to process events — otherwise
+  // anyone who knows the (sequential) schoolId in this URL could POST forged events and
+  // hijack a student's LINE link. A school must configure line_secret alongside line_token.
+  if (!school.line_secret || !req.rawBody) return res.sendStatus(403);
+  const expected = crypto.createHmac('sha256', school.line_secret).update(req.rawBody).digest('base64');
+  const got = req.get('X-Line-Signature') || '';
+  const a = Buffer.from(expected), b = Buffer.from(got);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.sendStatus(403);
 
   const events = (req.body && req.body.events) || [];
   for (const ev of events) {
