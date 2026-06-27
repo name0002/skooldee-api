@@ -338,6 +338,7 @@ function Schedule(){
   const [toast, showToast] = useToast();
   const [weekOffset, setWeekOffset] = useState(0); // 0=this week, -1=last, +1=next
   const [makeupOpen, setMakeupOpen] = useState(false);
+  const [eventsOpen, setEventsOpen] = useState(false); // events & holidays manager
   const [sessionsOpen, setSessionsOpen] = useState(false); // self-service booking manager
   const [viewMode, setViewMode] = useState("day"); // "day" = columns are weekdays · "room" = columns are rooms
   const [roomDay, setRoomDay] = useState(()=> typeof DATA._todayDow==='number' ? DATA._todayDow : (new Date().getDay()+6)%7);
@@ -369,6 +370,10 @@ function Schedule(){
   const cancelByKey = {}; EXC.filter(e=>e.type==='cancel').forEach(e=>{ cancelByKey[e.slot_id+'|'+e.date]=e; });
   const makeups = EXC.filter(e=>e.type==='makeup' && weekDateStrs.indexOf(e.date)>=0 && (filter==='all'||e.cat===filter))
     .map(e=>({ ...e, day: weekDateStrs.indexOf(e.date), _makeup:true }));
+  // school-wide events & holidays overlapping each day of the displayed week
+  const ALL_EVENTS = DATA.EVENTS||[];
+  const eventsByDay = weekDateStrs.map(ds => ALL_EVENTS.filter(ev => ds >= ev.date && ds <= (ev.end_date||ev.date)));
+  const holidayCol = eventsByDay.map(list => list.some(e=>e.type==='holiday'));
   const byDay = DATA.DAYS.map((d,di)=> DATA.layoutDay([ ...items.filter(s=>s.day===di).map(s=>({ ...s, _src:s })), ...makeups.filter(m=>m.day===di) ]));
 
   // ---- per-day student counts, broken down by subject (shown in column headers) ----
@@ -492,6 +497,7 @@ function Schedule(){
             <button className={"btn btn-sm"+(viewMode==="room"?" btn-primary":" btn-ghost")} style={{ height:32, padding:"0 12px" }} onClick={()=>setViewMode("room")} title="ดูตารางตามห้องเรียน">🚪 <span className="hide-mobile">ตามห้อง</span></button>
           </div>
           <button className="btn btn-ghost" onClick={()=>setMakeupOpen(true)} title="เพิ่มคาบเรียนชดเชยครั้งเดียว"><Icon n="plus" size={16}/> ชดเชย</button>
+          <button className="btn btn-ghost" onClick={()=>setEventsOpen(true)} title="เพิ่มอีเว้นท์หรือวันหยุดของโรงเรียน">🎉 <span className="hide-mobile">อีเว้นท์/วันหยุด</span></button>
           {DATA._isLiveMode && <button className="btn btn-ghost" onClick={()=>setSessionsOpen(true)} title="เปิดคลาสให้ผู้ปกครอง/นักเรียนจองออนไลน์เอง">📅 <span className="hide-mobile">จองออนไลน์</span></button>}
           <button className="btn btn-primary" onClick={()=>setBooking({})}><Icon n="plus" size={18}/> จองคาบเรียน</button>
         </div>
@@ -514,9 +520,18 @@ function Schedule(){
             {/* header */}
             <div className="sc-corner"></div>
             {DATA.DAYS.map((d,i)=>(
-              <div key={i} className="sc-dayhead" style={ i===TODAY_COL ? { background:"var(--primary-soft)" } : null }>
+              <div key={i} className="sc-dayhead" style={ holidayCol[i] ? { background:"#fef3c7" } : (i===TODAY_COL ? { background:"var(--primary-soft)" } : null) }>
                 <div className="cal-day" style={ i===TODAY_COL ? { color:"var(--primary-ink)" } : null }>{d.d}</div>
                 <div className="cal-date">{dayDates[i].date} {dayDates[i].mon}</div>
+                {eventsByDay[i].map((ev,ei)=>(
+                  <div key={ei} title={ev.title+(ev.note?(' · '+ev.note):'')}
+                    style={{ marginTop:3, fontSize:10.5, fontWeight:700, lineHeight:1.3, padding:'2px 6px', borderRadius:6,
+                      whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%',
+                      background: ev.type==='holiday'?'#fde68a':'var(--primary-soft)',
+                      color: ev.type==='holiday'?'#92400e':'var(--primary-ink)' }}>
+                    {ev.type==='holiday'?'🏖️ ':'🎉 '}{ev.title}
+                  </div>
+                ))}
                 {dayStats[i].total>0 && (
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6, marginTop:3, flexWrap:'wrap' }}
                     title={Object.entries(dayStats[i].byCat).map(([c,n])=>`${(DATA.CATS[c]||{}).label||c} ${n}`).join(' · ')}>
@@ -540,7 +555,7 @@ function Schedule(){
             </div>
             {/* day columns */}
             {byDay.map((evs,di)=>(
-              <div key={di} className="sc-col" style={{ height:H, background: di===TODAY_COL ? "color-mix(in oklch,var(--primary-soft) 45%,transparent)" : null }}
+              <div key={di} className="sc-col" style={{ height:H, background: holidayCol[di] ? "color-mix(in oklch,#fde68a 30%,transparent)" : (di===TODAY_COL ? "color-mix(in oklch,var(--primary-soft) 45%,transparent)" : null) }}
                 onClick={(e)=>{ if(justDraggedRef.current) return; const r=e.currentTarget.getBoundingClientRect(); let min=DATA.DAY_START+Math.round((e.clientY-r.top)/DATA.PX_PER_MIN/30)*30; min=Math.max(DATA.DAY_START,Math.min(DATA.DAY_END-30,min)); setBooking({ day:di, start:fmtMin(min) }); }}>
                 {hours.map(h=>(<div key={h} className="sc-hour" style={{ top:topOf(h*60) }}></div>))}
                 {ghost && ghost.day===di && dragRef.current && (
@@ -651,6 +666,7 @@ function Schedule(){
       }}/>}
       {booking && <BookingDrawer slot={booking} onClose={()=>setBooking(null)} onSave={()=>{ setBooking(null); showToast("จองคาบเรียนสำเร็จ"); }}/>}
       {makeupOpen && <MakeupDrawer onClose={()=>setMakeupOpen(false)} onSave={()=>{ setMakeupOpen(false); showToast("เพิ่มคาบชดเชยแล้ว ✓"); }}/>}
+      {eventsOpen && <EventsDrawer onClose={()=>setEventsOpen(false)} showToast={showToast}/>}
       {sessionsOpen && <BookableSessionsManager onClose={()=>setSessionsOpen(false)} showToast={showToast}/>}
       {moveAsk && (
         <Drawer title="ย้ายคาบเรียน"
@@ -886,6 +902,107 @@ function MakeupDrawer({ onClose, onSave }){
           <option value="90">1.5 ชั่วโมง</option>
           <option value="120">2 ชั่วโมง</option>
         </select>
+      </div>
+    </Drawer>
+  );
+}
+
+/* ---- Events & holidays: add school-wide markers shown on the week view ---- */
+function EventsDrawer({ onClose, showToast }){
+  const _today = new Date().toISOString().slice(0,10);
+  const [type,setType]   = useState('event');     // event | holiday
+  const [title,setTitle] = useState('');
+  const [date,setDate]   = useState(_today);
+  const [multi,setMulti] = useState(false);
+  const [endDate,setEnd] = useState('');
+  const [note,setNote]   = useState('');
+  const [busy,setBusy]   = useState(false);
+  const [err,setErr]     = useState(null);
+  const [, force]        = useState(0);            // re-render after add/delete
+
+  const _thaiMons = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const dLabel = (s)=>{ if(!s) return ''; const p=s.split('-'); return `${+p[2]} ${_thaiMons[+p[1]-1]} ${+p[0]+543}`; };
+
+  const events = (DATA.EVENTS||[]).slice().sort((a,b)=> a.date.localeCompare(b.date));
+
+  const add = async()=>{
+    if(!title.trim()){ setErr('กรุณาใส่ชื่อ'+(type==='holiday'?'วันหยุด':'อีเว้นท์')); return; }
+    if(!date){ setErr('กรุณาเลือกวันที่'); return; }
+    if(multi && endDate && endDate < date){ setErr('วันสิ้นสุดต้องไม่ก่อนวันเริ่ม'); return; }
+    setBusy(true); setErr(null);
+    const payload = { type, title:title.trim(), date, end_date: (multi&&endDate)?endDate:null, note:note.trim()||null };
+    try{
+      if(DATA.addEvent){ await DATA.addEvent(payload); }
+      else { (DATA.EVENTS=DATA.EVENTS||[]).push({ id:Date.now(), _dbId:null, ...payload }); if(window.bumpData) bumpData(); }
+      setTitle(''); setNote(''); setMulti(false); setEnd('');
+      force(v=>v+1);
+      showToast((type==='holiday'?'เพิ่มวันหยุด':'เพิ่มอีเว้นท์')+'แล้ว ✓');
+    }catch(e){ setErr(e.message||'บันทึกไม่สำเร็จ'); }
+    setBusy(false);
+  };
+  const remove = async(ev)=>{
+    try{
+      if(DATA.deleteEvent && ev._dbId!=null){ await DATA.deleteEvent(ev._dbId); }
+      else { DATA.EVENTS = (DATA.EVENTS||[]).filter(x=>x!==ev); if(window.bumpData) bumpData(); }
+      force(v=>v+1);
+      showToast('ลบแล้ว');
+    }catch(e){ showToast('ลบไม่สำเร็จ'); }
+  };
+
+  return (
+    <Drawer title="อีเว้นท์ & วันหยุด" sub="ทำเครื่องหมายบนตารางเรียน — วันหยุดจะไฮไลต์ทั้งวัน (คาบเรียนยังอยู่ ไม่ถูกลบ)" onClose={onClose} accent="#f59e0b"
+      footer={<>
+        <button className="btn btn-ghost" style={{flex:1}} onClick={onClose} disabled={busy}>ปิด</button>
+        <button className="btn btn-primary" style={{flex:1}} onClick={add} disabled={busy||!title.trim()||!date}>
+          {busy?'กำลังบันทึก…':<><Icon n="plus" size={16}/> เพิ่ม</>}
+        </button>
+      </>}>
+      {err && <div style={{background:'var(--danger-soft)',color:'var(--danger)',borderRadius:8,padding:'9px 13px',fontSize:13,marginBottom:12}}>{err}</div>}
+      <div className="field"><label>ประเภท</label>
+        <div className="tag-filter">
+          <button className={"chip"+(type==='event'?" active":"")} onClick={()=>setType('event')}>🎉 อีเว้นท์</button>
+          <button className={"chip"+(type==='holiday'?" active":"")} onClick={()=>setType('holiday')}>🏖️ วันหยุด</button>
+        </div>
+      </div>
+      <div className="field"><label>ชื่อ{type==='holiday'?'วันหยุด':'อีเว้นท์'}</label>
+        <input value={title} maxLength={120} onChange={e=>setTitle(e.target.value)}
+          placeholder={type==='holiday'?'เช่น วันสงกรานต์ / ปิดเทอม':'เช่น คอนเสิร์ตนักเรียน / ประชุมผู้ปกครอง'}
+          onKeyDown={e=>e.key==='Enter'&&add()}/>
+      </div>
+      <div style={{display:"flex",gap:12}}>
+        <div className="field" style={{flex:1}}><label>{multi?'วันเริ่ม':'วันที่'}</label>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)}/>
+        </div>
+        {multi && (
+          <div className="field" style={{flex:1}}><label>วันสิ้นสุด</label>
+            <input type="date" value={endDate} min={date} onChange={e=>setEnd(e.target.value)}/>
+          </div>
+        )}
+      </div>
+      <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'var(--text-2)',cursor:'pointer',marginBottom:6}}>
+        <input type="checkbox" checked={multi} onChange={e=>{ setMulti(e.target.checked); if(!e.target.checked) setEnd(''); else if(!endDate) setEnd(date); }}/>
+        หลายวัน (เช่น ปิดเทอม / ทริป)
+      </label>
+      <div className="field"><label>หมายเหตุ (ไม่บังคับ)</label>
+        <input value={note} maxLength={500} onChange={e=>setNote(e.target.value)} placeholder="รายละเอียดเพิ่มเติม"/>
+      </div>
+
+      <div style={{ marginTop:18, borderTop:'1px solid var(--border)', paddingTop:14 }}>
+        <div style={{ fontSize:12.5, fontWeight:700, color:'var(--text-3)', marginBottom:10 }}>รายการที่มี ({events.length})</div>
+        {events.length===0 && <div style={{ fontSize:13, color:'var(--text-3)', padding:'8px 0' }}>ยังไม่มีอีเว้นท์หรือวันหยุด</div>}
+        <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+          {events.map((ev)=>(
+            <div key={ev.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 11px', borderRadius:10, border:'1px solid var(--border)',
+              background: ev.type==='holiday'?'#fffbeb':'var(--surface)' }}>
+              <span style={{ fontSize:17 }}>{ev.type==='holiday'?'🏖️':'🎉'}</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontWeight:600, fontSize:13.5, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{ev.title}</div>
+                <div style={{ fontSize:11.5, color:'var(--text-3)' }}>{dLabel(ev.date)}{ev.end_date?(' – '+dLabel(ev.end_date)):''}{ev.note?(' · '+ev.note):''}</div>
+              </div>
+              <button className="btn btn-sm btn-ghost" style={{ color:'var(--danger)', padding:'4px 9px' }} onClick={()=>remove(ev)} title="ลบ"><Icon n="x" size={13}/></button>
+            </div>
+          ))}
+        </div>
       </div>
     </Drawer>
   );

@@ -270,7 +270,7 @@ function AuthRoot(){
     try{
       /* -- load all data in parallel -- */
       const dow = (new Date().getDay()+6)%7; // Mon=0..Sun=6
-      const [students, dashboard, todaySlots, invoices, teachers, revenueHistory, homeworkRows, referralRows, weekSlots, packagesData, exceptionRows] = await Promise.all([
+      const [students, dashboard, todaySlots, invoices, teachers, revenueHistory, homeworkRows, referralRows, weekSlots, packagesData, exceptionRows, eventRows] = await Promise.all([
         window.API.students(),
         window.API.dashboard(),
         window.API.req('/api/schedule?day='+dow),
@@ -283,6 +283,7 @@ function AuthRoot(){
         window.API.packages().catch(()=>[]),   // course packages
         // guard against a stale cached api.js that predates this function
         (window.API.scheduleExceptions ? window.API.scheduleExceptions() : Promise.resolve([])).catch(()=>[]),
+        (window.API.calendarEvents ? window.API.calendarEvents() : Promise.resolve([])).catch(()=>[]),
       ]);
 
       // pending enrollment requests — owner/admin only; silently ignored for other roles
@@ -414,6 +415,21 @@ function AuthRoot(){
         const ex = DATA.EXCEPTIONS.find(x=>x._dbId===id||x.id===id);
         if(ex&&ex._dbId) await window.API.deleteException(ex._dbId);
         DATA.EXCEPTIONS = DATA.EXCEPTIONS.filter(x=>x!==ex);
+        bumpData();
+      };
+
+      /* -- school-wide calendar events & holidays -- */
+      const mapEvent = (e)=>({ id:e.id, _dbId:e.id, type:e.type, title:e.title, date:e.date, end_date:e.end_date||null, note:e.note||null });
+      DATA.EVENTS = (Array.isArray(eventRows)?eventRows:[]).map(mapEvent);
+      DATA.addEvent = async function(payload){
+        const e = await window.API.addEvent(payload);
+        DATA.EVENTS.push(mapEvent(e));
+        bumpData(); return e;
+      };
+      DATA.deleteEvent = async function(id){
+        const ev = DATA.EVENTS.find(x=>x._dbId===id||x.id===id);
+        if(ev&&ev._dbId) await window.API.deleteEvent(ev._dbId);
+        DATA.EVENTS = DATA.EVENTS.filter(x=>x!==ev);
         bumpData();
       };
 

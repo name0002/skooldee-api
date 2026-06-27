@@ -441,4 +441,4 @@ window.DATA = { SCHOOL, CATS, TEACHERS, TEACHER_BY_CAT, COURSES, STUDENTS, STATU
   listAssessments, addAssessment, deleteAssessment, NOW_KEY, HW_STATUS, HOMEWORK, addHomework, updateHomework, isOverdue, setNearLimit,
   evalTemplates, addEvalTemplate, patchEvalTemplate, deleteEvalTemplate, listEvaluations, submitEvaluation, deleteEvaluation,
   REF_REWARD, REF_FRIEND_BONUS, refCode, REF_STATUS, REFERRALS, addReferral, setReferralStatus, refStats,
-  NAME_DISPLAY, setNameDisplay, dispName, PIPELINE_STAGES };
+  NAME_DISPLAY, setNameDisplay, dispName, PIPELINE_STAGES, EXCEPTIONS:[], EVENTS:[] };

@@ -139,6 +139,38 @@ r.delete('/exceptions/:id', canManage, wrap((req, res) => {
   res.json({ ok: true });
 }));
 
+// ---- school-wide calendar events & holidays (informational markers on the week view) ----
+const EVENT_TYPES = ['event', 'holiday'];
+
+// GET /api/schedule/events?from=YYYY-MM-DD&to=YYYY-MM-DD — markers overlapping the range
+r.get('/events', wrap((req, res) => {
+  let rows = all('SELECT * FROM calendar_events WHERE school_id = ? ORDER BY date', req.schoolId);
+  if (req.query.from) rows = rows.filter((e) => (e.end_date || e.date) >= req.query.from);
+  if (req.query.to) rows = rows.filter((e) => e.date <= req.query.to);
+  res.json(rows);
+}));
+
+// POST /api/schedule/events — { type, title, date, end_date?, note? }
+r.post('/events', canManage, wrap((req, res) => {
+  const b = required(req.body, ['title', 'date']);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date)) throw bad('date must be YYYY-MM-DD');
+  if (b.end_date && !/^\d{4}-\d{2}-\d{2}$/.test(b.end_date)) throw bad('end_date must be YYYY-MM-DD');
+  const type = EVENT_TYPES.includes(b.type) ? b.type : 'event';
+  const end = (b.end_date && b.end_date >= b.date) ? b.end_date : null;
+  const title = String(b.title).trim().slice(0, 120);
+  if (!title) throw bad('title required');
+  const result = run(
+    `INSERT INTO calendar_events (school_id, type, title, date, end_date, note) VALUES (?,?,?,?,?,?)`,
+    req.schoolId, type, title, b.date, end, (b.note != null && b.note !== '') ? String(b.note).slice(0, 500) : null);
+  res.status(201).json(get('SELECT * FROM calendar_events WHERE id = ?', Number(result.lastInsertRowid)));
+}));
+
+r.delete('/events/:id', canManage, wrap((req, res) => {
+  const result = run('DELETE FROM calendar_events WHERE id = ? AND school_id = ?', req.params.id, req.schoolId);
+  if (!result.changes) throw bad('event not found', 404);
+  res.json({ ok: true });
+}));
+
 // ============================================================================
 //  Self-service bookable sessions (admin side). Parents/prospects book seats in
 //  these through the public /api/public/book routes. One table, many `kind`s.

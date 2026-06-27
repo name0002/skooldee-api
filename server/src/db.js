@@ -293,6 +293,23 @@ CREATE TABLE IF NOT EXISTS bookings (
 CREATE INDEX IF NOT EXISTS idx_bookings_session ON bookings(session_id, status);
 CREATE INDEX IF NOT EXISTS idx_bookings_school ON bookings(school_id, status);
 
+-- School-wide calendar markers shown on the weekly schedule:
+--   event   → an informational marker (recital, parent meeting, open house…)
+--   holiday → the school is closed; the day is tinted and labelled (classes stay
+--             visible so the admin can still reschedule them — non-destructive)
+-- A marker can span multiple days via end_date (inclusive); NULL end_date = single day.
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+  type TEXT NOT NULL DEFAULT 'event',            -- event | holiday
+  title TEXT NOT NULL,
+  date TEXT NOT NULL,                            -- start date YYYY-MM-DD
+  end_date TEXT,                                 -- optional last day (inclusive); NULL = single day
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_events_school_date ON calendar_events(school_id, date);
+
 -- Staff (teacher) evaluation: a school defines reusable rubrics (criteria, 1-5 stars
 -- each, same shape as the student-assessment rubric) then an owner/supervisor scores
 -- a teacher against one of those templates on a given date.

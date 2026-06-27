@@ -63,6 +63,10 @@
     classConfirmations: function (date)    { return req('/api/schedule/confirmations?date=' + encodeURIComponent(date)); },
     addException:       function (d)       { return req('/api/schedule/exceptions',    { method:'POST', body: JSON.stringify(d) }); },
     deleteException:    function (id)      { return req('/api/schedule/exceptions/'+id, { method:'DELETE' }); },
+    /* ---- School-wide calendar events & holidays ---- */
+    calendarEvents:    function (from,to) { return req('/api/schedule/events' + (from?('?from='+from+(to?'&to='+to:'')):'')); },
+    addEvent:          function (d)       { return req('/api/schedule/events',         { method:'POST', body: JSON.stringify(d) }); },
+    deleteEvent:       function (id)      { return req('/api/schedule/events/'+id,      { method:'DELETE' }); },
     /* ---- Self-service bookable sessions ---- */
     bookableSessions:  function (q)        { return req('/api/schedule/sessions' + (q ? '?' + new URLSearchParams(q) : '')); },
     createSession:     function (d)        { return req('/api/schedule/sessions',       { method:'POST',  body: JSON.stringify(d) }); },
