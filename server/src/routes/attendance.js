@@ -94,13 +94,16 @@ r.post('/', requirePage('attendance', 'manage'), wrap((req, res) => {
   const statusChanged = b.status !== prevStatus;
 
   let remainingAfter = student.sessions_remaining;
+  // captured here (outer scope) so the near-limit notification block further down can read
+  // them — declaring these inside the if-block below threw "subjectRemaining is not defined"
+  // on every present mark (the notification runs in a separate `if (becameP)` block).
+  let subjectRemaining = null;
+  let subjectLabel = null;
   if (becameP || leftP) {
     const d = becameP ? -1 : 1;
     remainingAfter = Math.max(0, student.sessions_remaining + d);
     const pkgJson = adjustPackage(student, classCategory(b), d);
     // capture per-subject remaining so the near-limit notification is per-course, not aggregate
-    let subjectRemaining = null;
-    let subjectLabel = null;
     if (pkgJson && becameP) {
       try {
         const cat = classCategory(b);
@@ -110,12 +113,18 @@ r.post('/', requirePage('attendance', 'manage'), wrap((req, res) => {
         if (pkg) { subjectRemaining = pkg.sessions_remaining; subjectLabel = pkg.name || pkg.category || null; }
       } catch { /* ignore */ }
     }
-    if (pkgJson != null) run('UPDATE students SET sessions_remaining = ?, points = MAX(0, points + ?), packages_json = ? WHERE id = ? AND school_id = ?',
-      remainingAfter, becameP ? POINTS_PER_ATTEND : -POINTS_PER_ATTEND, pkgJson, student.id, req.schoolId);
-    else run('UPDATE students SET sessions_remaining = ?, points = MAX(0, points + ?) WHERE id = ? AND school_id = ?',
-      remainingAfter, becameP ? POINTS_PER_ATTEND : -POINTS_PER_ATTEND, student.id, req.schoolId);
-    if (becameP) run('INSERT INTO points_ledger (school_id, student_id, delta, reason) VALUES (?,?,?,?)',
-      req.schoolId, student.id, POINTS_PER_ATTEND, 'เช็คชื่อเข้าเรียน');
+    // compute the new balance here (0-floored) so we can log the ACTUAL points change to the
+    // ledger — both on earn (present) and refund (un-mark). Otherwise the refund adjusted the
+    // balance without a ledger row and SUM(ledger) drifted away from students.points.
+    const nominal = becameP ? POINTS_PER_ATTEND : -POINTS_PER_ATTEND;
+    const newPoints = Math.max(0, (student.points || 0) + nominal);
+    const appliedDelta = newPoints - (student.points || 0);
+    if (pkgJson != null) run('UPDATE students SET sessions_remaining = ?, points = ?, packages_json = ? WHERE id = ? AND school_id = ?',
+      remainingAfter, newPoints, pkgJson, student.id, req.schoolId);
+    else run('UPDATE students SET sessions_remaining = ?, points = ? WHERE id = ? AND school_id = ?',
+      remainingAfter, newPoints, student.id, req.schoolId);
+    if (appliedDelta !== 0) run('INSERT INTO points_ledger (school_id, student_id, delta, reason) VALUES (?,?,?,?)',
+      req.schoolId, student.id, appliedDelta, becameP ? 'เช็คชื่อเข้าเรียน' : 'ยกเลิกเช็คชื่อ');
   }
 
   // upsert the single row: update in place, insert if new, delete on clear
