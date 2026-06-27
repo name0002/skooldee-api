@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>skooldee · ระบบจัดการ</title>
+  <meta name="robots" content="noindex, nofollow"/>
+  <meta name="theme-color" content="#111111"/>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Work+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=Prompt:wght@400;500;600;700&family=Kanit:wght@400;500;600;700&family=Mitr:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="assets/styles.css"/>
+  <link rel="stylesheet" href="assets/chatbot.css"/>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- site config (provides window.CLASSDEE.API_URL) -->
+  <script src="assets/site.js"></script>
+  <!-- API client must load before JSX (no Babel needed) -->
+  <script src="assets/api.js"></script>
+  <!-- QR generator (self-hosted, MIT) — exposes window.qrcode; used for the LINE OA QR -->
+  <script src="assets/qrcode.min.js"></script>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <!-- data-demo provides DATA.* defaults (CATS, layout helpers, etc.)
+       AuthRoot overrides DATA.SCHOOL & DATA.STUDENTS with real API data after login -->
+  <script type="text/babel" src="assets/data-demo.jsx"></script>
+  <script type="text/babel" src="assets/components.jsx"></script>
+  <script type="text/babel" src="assets/tweaks-panel.jsx"></script>
+  <script type="text/babel" src="assets/screens1.jsx"></script>
+  <script type="text/babel" src="assets/screens2.jsx"></script>
+  <script type="text/babel" src="assets/screens3.jsx"></script>
+  <script type="text/babel" src="assets/screens4.jsx"></script>
+  <script type="text/babel" src="assets/screens5.jsx"></script>
+  <!-- app.jsx: no __DEMO_MODE → renders AuthRoot (login required) -->
+  <script type="text/babel" src="assets/app.jsx"></script>
+
+  <!-- in-app "how to use skooldee" help assistant — independent of the React tree -->
+  <script>window.SKOOLDEE_CHAT = { mode: 'app' };</script>
+  <script src="assets/chatbot.js"></script>
+</body>
+</html>

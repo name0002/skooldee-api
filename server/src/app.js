@@ -25,7 +25,7 @@ import enrollments from './routes/enrollments.js';
 import stripeRoutes from './routes/stripe.js';
 import adminRoutes from './routes/admin.js';
 import richMenu from './routes/richmenu.js';
-// import chat from './routes/chat.js'; // disabled: chat.js/anthropic.js/rateLimit.js aren't committed yet — re-enable once they land
+import chat from './routes/chat.js';
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
@@ -33,6 +33,11 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 export function createApp() {
   const app = express();
+  // Behind Railway's proxy. Trust exactly ONE hop so req.ip reflects the real client
+  // (from X-Forwarded-For) for the chat rate limiter — without this, every visitor
+  // collapses to the proxy's IP and shares one bucket. Use 1, not `true`: trusting all
+  // hops would let a client spoof X-Forwarded-For to evade the limit.
+  app.set('trust proxy', 1);
   app.use(cors({ origin: allowedOrigins, credentials: true }));
   // capture raw body so the LINE webhook can verify its HMAC signature.
   // limit raised from the 100kb default: several endpoints carry base64 images in
@@ -53,7 +58,7 @@ export function createApp() {
   // Stripe: webhook is public; create-checkout and portal use requireAuth inline
   app.use('/api/stripe', stripeRoutes);
   // chat: /public is open (landing FAQ); /help applies requireAuth itself (app help)
-  // app.use('/api/chat', chat); // disabled — see import comment above
+  app.use('/api/chat', chat);
 
   // everything below requires a valid JWT and is automatically scoped to the
   // authenticated user's school (req.schoolId) — the multi-tenant boundary.

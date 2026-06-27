@@ -29,6 +29,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Work+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="assets/landing.css"/>
+<link rel="stylesheet" href="assets/chatbot.css"/>
 <script defer src="assets/site.js"></script>
 <!-- JSON-LD structured data -->
 <script type="application/ld+json">
@@ -336,5 +337,7 @@
   }, { threshold:0.12 });
   document.querySelectorAll('.reveal').forEach((el,i)=>{ el.style.transitionDelay = (i%3*0.06)+'s'; io.observe(el); });
 </script>
+<script>window.SKOOLDEE_CHAT = { mode: 'landing' };</script>
+<script defer src="assets/chatbot.js"></script>
 </body>
 </html>
