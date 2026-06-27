@@ -26,6 +26,7 @@ function mapStudent(s){
     email:s.email||null,
     birthday:s.birthday||null,
     recipient:s.recipient_type||'parent',
+    honorific:s.honorific||'auto',
     packages:(function(){ try{ if(s.packages_json){ var a=JSON.parse(s.packages_json); if(Array.isArray(a)) return a; } }catch(e){} return []; })(),
   };
 }
@@ -494,6 +495,7 @@ function AuthRoot(){
         if('goal'      in patch) ap.goal      = patch.goal;
         if('email'     in patch) ap.email     = patch.email;
         if('recipient' in patch) ap.recipient_type = patch.recipient;
+        if('honorific' in patch) ap.honorific = patch.honorific==='auto' ? null : patch.honorific;
         if('packages'  in patch){ ap.packages = patch.packages;
           s.packages = patch.packages.slice();
           s.remaining = patch.packages.reduce((a,p)=>a+(Number(p.sessions_remaining)||0),0);

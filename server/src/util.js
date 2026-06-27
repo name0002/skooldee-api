@@ -72,17 +72,31 @@ export function nearLimitInfo(student, threshold) {
 //   studentRef — how to mention the student in the body ("น้องเอย", or "คุณ" when self)
 //   care       — closing ask appropriate to the recipient
 //   isSelf     — the learner receives their own messages (address directly, no "น้อง")
-export function recipientWords(type, name) {
+// `age` tunes the honorific: an adult learner is "คุณ", a child is "น้อง" — never call a
+// 46-year-old "น้อง". Unknown age falls back to "น้อง" for guardian-style contacts and
+// "คุณ" for self-learners. `honorific` ('น้อง' | 'พี่' | 'คุณ') overrides the age guess
+// when the school wants a specific tone (e.g. address an adult as "พี่", not "คุณ").
+export function recipientWords(type, name, age, honorific) {
   const n = name || '';
+  const a = Number(age);
+  const known = Number.isFinite(a) && a > 0;
+  const ageAdult = known ? a >= 18 : type === 'self';
+  const h = ['น้อง', 'พี่', 'คุณ'].includes(honorific) ? honorific : (ageAdult ? 'คุณ' : 'น้อง');
+  const adult = h !== 'น้อง';                          // anyone not "น้อง" gets grown-up tone
+  const ref = `${h}${n}`;                              // third-person name for the learner
+  const supervise = adult                              // closing ask, tuned to the learner's age
+    ? `ฝากช่วยสนับสนุนการฝึกซ้อมของ${ref}ด้วยนะคะ 😊`
+    : `รบกวนช่วยดูแล${ref}ฝึกด้วยนะคะ 😊`;
   switch (type) {
     case 'self':
-      return { greet: `คุณ${n}`, studentRef: 'คุณ', care: 'รบกวนฝึกซ้อมตามนี้ด้วยนะคะ 😊', isSelf: true };
+      return { greet: ref, studentRef: ref, care: 'รบกวนฝึกซ้อมตามนี้ด้วยนะคะ 😊', isSelf: true };
     case 'sibling':
-      return { greet: `พี่ของน้อง${n}`, studentRef: `น้อง${n}`, care: 'รบกวนช่วยดูแลน้องฝึกด้วยนะคะ 😊', isSelf: false };
+      return { greet: `พี่ของ${ref}`, studentRef: ref, care: supervise, isSelf: false };
     case 'relative':
-      return { greet: `ครอบครัวของน้อง${n}`, studentRef: `น้อง${n}`, care: 'รบกวนช่วยดูแลน้องฝึกด้วยนะคะ 😊', isSelf: false };
+      return { greet: `ครอบครัวของ${ref}`, studentRef: ref, care: supervise, isSelf: false };
     case 'parent':
     default:
-      return { greet: `คุณพ่อคุณแม่ของน้อง${n}`, studentRef: `น้อง${n}`, care: 'รบกวนผู้ปกครองช่วยดูแลน้องฝึกด้วยนะคะ 😊', isSelf: false };
+      return { greet: `คุณพ่อคุณแม่ของ${ref}`, studentRef: ref,
+        care: adult ? supervise : `รบกวนผู้ปกครองช่วยดูแล${ref}ฝึกด้วยนะคะ 😊`, isSelf: false };
   }
 }

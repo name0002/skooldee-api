@@ -27,7 +27,7 @@ r.get('/', wrap((req, res) => {
 r.post('/', canManage, wrap(async (req, res) => {
   const b = required(req.body, ['student_id', 'title']);
   if (!ownsStudent(req, b.student_id)) throw bad('student not found', 404);
-  const student = get('SELECT id, name, nickname, recipient_type FROM students WHERE id = ? AND school_id = ?', b.student_id, req.schoolId);
+  const student = get('SELECT id, name, nickname, recipient_type, age, honorific FROM students WHERE id = ? AND school_id = ?', b.student_id, req.schoolId);
   if (!student) throw bad('student not found', 404);
   const result = run(
     'INSERT INTO homework (school_id, student_id, title, detail, due_date, notified) VALUES (?,?,?,?,?,?)',
@@ -38,7 +38,7 @@ r.post('/', canManage, wrap(async (req, res) => {
   let line = null;
   if (b.notify) {
     const name = student.nickname || student.name;
-    const w = recipientWords(student.recipient_type, name);
+    const w = recipientWords(student.recipient_type, name, student.age, student.honorific);
     let text = b.message;                         // explicit client-supplied message wins
     if (!text) {
       const sch = get('SELECT homework_message_template FROM schools WHERE id = ?', req.schoolId);

@@ -317,6 +317,19 @@ CREATE TABLE IF NOT EXISTS evaluations (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_evaluations_teacher ON evaluations(school_id, teacher_id);
+
+CREATE TABLE IF NOT EXISTS chat_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER REFERENCES schools(id) ON DELETE CASCADE,
+  source TEXT NOT NULL,                           -- 'landing' | 'app'
+  session_id TEXT NOT NULL,
+  role TEXT NOT NULL,                             -- 'user' | 'assistant'
+  content TEXT NOT NULL,
+  tokens_in INTEGER,
+  tokens_out INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_chat_logs_session ON chat_logs(session_id, created_at);
 `;
 
 export function initSchema() {
@@ -380,6 +393,8 @@ export function initSchema() {
   // who actually receives a student's LINE messages, so wording adapts (not always "คุณพ่อคุณแม่"):
   // parent (default/null) | self (adult learner) | sibling (พี่/น้อง) | relative (ญาติ/อื่นๆ)
   addCol('ALTER TABLE students ADD COLUMN recipient_type TEXT');
+  // override for how the learner is addressed: auto (default/null, by age) | น้อง | พี่ | คุณ
+  addCol('ALTER TABLE students ADD COLUMN honorific TEXT');
   // customizable homework-notification template. Placeholders: {ผู้รับ} {ชื่อ} {หัวข้อ} {รายละเอียด} {กำหนดส่ง}
   addCol('ALTER TABLE schools ADD COLUMN homework_message_template TEXT');
   // LINE welcome message when parent/student links their account

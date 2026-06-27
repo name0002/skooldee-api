@@ -165,13 +165,34 @@ const RECIPIENT_TYPES = [
   { key:'sibling', label:'พี่/น้อง' },
   { key:'relative',label:'ญาติ/อื่นๆ' },
 ];
-const recipientWords = (type, name)=>{
+// คำนำหน้าเวลาเรียกผู้เรียน — ให้โรงเรียนเลือกเองได้ (override การเดาจากอายุ)
+const HONORIFICS = [
+  { key:'auto', label:'อัตโนมัติ (ตามอายุ)' },
+  { key:'น้อง', label:'น้อง' },
+  { key:'พี่',  label:'พี่' },
+  { key:'คุณ',  label:'คุณ' },
+];
+// age tunes the honorific: an adult learner is "คุณ", a child is "น้อง" — never call a
+// 46-year-old "น้อง". When age is unknown we fall back to "น้อง" for guardian-style
+// contacts (parent/sibling/relative, usually a child) and "คุณ" for self-learners.
+// `honorific` ('น้อง'|'พี่'|'คุณ') overrides that guess when the school picks a tone.
+const recipientWords = (type, name, age, honorific)=>{
   const n = name||'';
+  const a = Number(age);
+  const known = Number.isFinite(a) && a>0;
+  const ageAdult = known ? a>=18 : (type==='self');
+  const h = ['น้อง','พี่','คุณ'].includes(honorific) ? honorific : (ageAdult?'คุณ':'น้อง');
+  const adult = h!=='น้อง';                          // anyone not "น้อง" gets grown-up tone
+  const ref = `${h}${n}`;                            // third-person name for the learner
+  const supervise = adult                            // closing ask, tuned to the learner's age
+    ? `ฝากช่วยสนับสนุนการฝึกซ้อมของ${ref}ด้วยนะคะ 😊`
+    : `รบกวนช่วยดูแล${ref}ฝึกด้วยนะคะ 😊`;
   switch(type){
-    case 'self':     return { greet:`คุณ${n}`, studentRef:'คุณ', care:'รบกวนฝึกซ้อมตามนี้ด้วยนะคะ 😊', isSelf:true };
-    case 'sibling':  return { greet:`พี่ของน้อง${n}`, studentRef:`น้อง${n}`, care:'รบกวนช่วยดูแลน้องฝึกด้วยนะคะ 😊', isSelf:false };
-    case 'relative': return { greet:`ครอบครัวของน้อง${n}`, studentRef:`น้อง${n}`, care:'รบกวนช่วยดูแลน้องฝึกด้วยนะคะ 😊', isSelf:false };
-    default:         return { greet:`คุณพ่อคุณแม่ของน้อง${n}`, studentRef:`น้อง${n}`, care:'รบกวนผู้ปกครองช่วยดูแลน้องฝึกด้วยนะคะ 😊', isSelf:false };
+    case 'self':     return { greet:ref, studentRef:ref, care:'รบกวนฝึกซ้อมตามนี้ด้วยนะคะ 😊', isSelf:true };
+    case 'sibling':  return { greet:`พี่ของ${ref}`, studentRef:ref, care:supervise, isSelf:false };
+    case 'relative': return { greet:`ครอบครัวของ${ref}`, studentRef:ref, care:supervise, isSelf:false };
+    default:         return { greet:`คุณพ่อคุณแม่ของ${ref}`, studentRef:ref,
+                              care:adult?supervise:`รบกวนผู้ปกครองช่วยดูแล${ref}ฝึกด้วยนะคะ 😊`, isSelf:false };
   }
 };
 
@@ -404,7 +425,7 @@ function deleteEvaluation(teacherId, id){
 
 window.DATA = { SCHOOL, CATS, TEACHERS, TEACHER_BY_CAT, COURSES, STUDENTS, STATUS, DAYS, SCHEDULE, layoutDay,
   DAY_START, DAY_END, PX_PER_MIN, toMin, SLOT_TIMES, TODAY, INVOICES, PAY_STATUS, REVENUE, baht,
-  PACKAGES_DEFAULT, loadPackages, savePackagePrice, NEAR_LIMIT, isNearEnding, nearEndingInfo, lineResultMsg, recipientWords, RECIPIENT_TYPES,
+  PACKAGES_DEFAULT, loadPackages, savePackagePrice, NEAR_LIMIT, isNearEnding, nearEndingInfo, lineResultMsg, recipientWords, RECIPIENT_TYPES, HONORIFICS,
   updateStudent, findStudent, TODAY_KEY, TODAY_LABEL, ATT_STATUS, loadAttendance, saveAttendance,
   TIERS, tierOf, givePoints, ASSESS_CRITERIA:{}, SHOW_ASSESS_PARENTS:false, SHOW_COURSE_NO_PARENTS:false, PAYMENT_QR_IMAGE:null, SCHOOL_LOGO:null, ENROLLMENTS:[],
   listAssessments, addAssessment, deleteAssessment, NOW_KEY, HW_STATUS, HOMEWORK, addHomework, updateHomework, isOverdue, setNearLimit,
