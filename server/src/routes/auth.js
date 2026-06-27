@@ -121,11 +121,17 @@ r.get('/me', requireAuth, wrap((req, res) => {
     try { prefs = notify_prefs ? JSON.parse(notify_prefs) : {}; } catch { prefs = {}; }
     let rooms = [];
     try { const a = JSON.parse(rooms_json || '[]'); rooms = Array.isArray(a) ? a.filter((x) => typeof x === 'string' && x.trim()) : []; } catch { rooms = []; }
+    let days_remaining = null;
+    if (s.plan_expires) {
+      const diff = new Date(s.plan_expires).getTime() - Date.now();
+      days_remaining = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    }
     school = {
       ...safe, rooms, notify_prefs: prefs,
       line_configured: !!line_token, line_secret_configured: !!line_secret,
       show_assessments_to_parents: !!show_assessments_to_parents,
       show_course_no_to_parents: !!show_course_no_to_parents,
+      days_remaining,
     };
   }
   res.json({ user, school });

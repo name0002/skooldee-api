@@ -42,10 +42,12 @@ r.get('/templates', canManage, wrap((req, res) => {
 }));
 
 // POST /api/staff-evaluations/templates
+// Created empty by design: the UI adds criteria afterward in the per-template
+// editor and saves via PATCH (which still enforces ≥1 criterion). Requiring
+// criteria here made every "create" fail since the create form only has a name.
 r.post('/templates', canManage, wrap((req, res) => {
   const b = required(req.body, ['name']);
   const criteria = cleanCriteria(b.criteria);
-  if (!criteria.length) throw bad('ต้องมีเกณฑ์ประเมินอย่างน้อย 1 ข้อ');
   const result = run(
     'INSERT INTO evaluation_templates (school_id, name, criteria_json) VALUES (?,?,?)',
     req.schoolId, String(b.name).trim().slice(0, 100), JSON.stringify(criteria));
