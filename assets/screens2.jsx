@@ -414,7 +414,12 @@ function StudentDrawer({ s, onClose }){
       if(!m) return { bd_day:"", bd_mon:"", bd_year:"", bd_era:"be" };
       return { bd_day:String(Number(m[3])), bd_mon:String(Number(m[2])), bd_year:String(Number(m[1])+543), bd_era:"be" };
     })();
-    setF({ name:s.name||s.full||"", nickname:s.nickname||"", age:s.age, phone:s.phone, guardian:s.guardian==="-"?"":s.guardian, email:s.email==="-"?"":(s.email||""), goal:s.goal||"", recipient:s.recipient||"parent", honorific:s.honorific||"auto", dur:s.dur, status:s.status, balance:s.balance, cats:(s.cats||[]).slice(), ...bd });
+    setF({ name:s.name||s.full||"", nickname:s.nickname||"", age:s.age, phone:s.phone, guardian:s.guardian==="-"?"":s.guardian, email:s.email==="-"?"":(s.email||""), goal:s.goal||"", recipient:s.recipient||"parent", honorific:s.honorific||"auto", dur:s.dur, status:s.status, balance:s.balance, cats:(s.cats||[]).slice(),
+      billing_enabled:!!s.billing_enabled,
+      billing_package_id:s.billing_package_id||null,
+      billing_discount_type:s.billing_discount_type||"none",
+      billing_discount_value:s.billing_discount_value?String(s.billing_discount_value):"",
+      ...bd });
     const init = (s.packages&&s.packages.length)
       ? s.packages.map(p=>({ category:p.category||(s.cats&&s.cats[0])||'piano', package_id:p.package_id||null, sessions:p.sessions_total||0, remaining:p.sessions_remaining||0 }))
       : [{ category:(s.cats&&s.cats[0])||'piano', package_id:null, sessions:s.pkg||0, remaining:s.remaining||0 }];
@@ -435,7 +440,11 @@ function StudentDrawer({ s, onClose }){
       honorific:f.honorific||"auto",
       packages,
       status:f.status, balance:Math.max(0,Number(f.balance)||0),
-      categories:(f.cats&&f.cats.length)?f.cats:s.cats
+      categories:(f.cats&&f.cats.length)?f.cats:s.cats,
+      billing_enabled:!!f.billing_enabled,
+      billing_package_id:f.billing_enabled ? (f.billing_package_id||null) : null,
+      billing_discount_type:(f.billing_enabled && f.billing_discount_type!=='none') ? f.billing_discount_type : null,
+      billing_discount_value:(f.billing_enabled && f.billing_discount_type!=='none') ? (Number(f.billing_discount_value)||0) : 0,
     });
     s.name=f.name.trim(); s.full=f.name.trim(); s.nickname=(f.nickname||"").trim()||null; s.birthday=bdInfo.birthday;
     bumpData(); setEdit(false); showToast("บันทึกข้อมูลแล้ว");
@@ -584,6 +593,51 @@ function StudentDrawer({ s, onClose }){
               <Icon n="plus" size={14}/> เพิ่มแพ็กเกจ (เรียนหลายวิชา)
             </button>
           </div>
+          {(()=>{
+            const selPkg = eePkgs.find(p=>String(p._dbId||p.id)===String(f.billing_package_id));
+            const base = selPkg ? (selPkg.price||0) : 0;
+            const dt = f.billing_discount_type, dv = Number(f.billing_discount_value)||0;
+            let net = base;
+            if(dt==='percent') net = Math.max(0, Math.round(base*(1-Math.min(dv,100)/100)));
+            else if(dt==='amount') net = Math.max(0, base-dv);
+            return (
+            <div className="field" style={{borderTop:'1px solid var(--border)',paddingTop:14,marginTop:4}}>
+              <label style={{display:'flex',alignItems:'flex-start',gap:9,cursor:'pointer'}}>
+                <input type="checkbox" checked={!!f.billing_enabled} onChange={e=>set('billing_enabled',e.target.checked)} style={{width:16,height:16,marginTop:2,flexShrink:0}}/>
+                <span>🔁 ออกบิลต่อคอร์สอัตโนมัติ<br/><span style={{fontSize:11,fontWeight:400,color:'var(--text-3)'}}>เมื่อคาบใกล้หมด ระบบจะออกใบแจ้งหนี้ + ส่ง QR ทาง LINE ให้เอง</span></span>
+              </label>
+              {f.billing_enabled && (
+                <div style={{marginTop:12,display:'flex',flexDirection:'column',gap:10,paddingLeft:4}}>
+                  <div>
+                    <div style={{fontSize:12,color:'var(--text-3)',marginBottom:4}}>แพ็กเกจที่จะออกบิลให้</div>
+                    <select value={f.billing_package_id||''} onChange={e=>set('billing_package_id',e.target.value?Number(e.target.value):null)}>
+                      <option value="">— เลือกแพ็กเกจ —</option>
+                      {eePkgs.map(p=><option key={p._dbId||p.id} value={p._dbId||p.id}>{p.name} · {p.sessions} ครั้ง · {DATA.baht(p.price||0)}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{fontSize:12,color:'var(--text-3)',marginBottom:4}}>ส่วนลดประจำตัว <span style={{color:'var(--text-3)'}}>· ใส่ให้ทุกบิลอัตโนมัติ</span></div>
+                    <div style={{display:'flex',gap:8}}>
+                      <select value={f.billing_discount_type||'none'} onChange={e=>set('billing_discount_type',e.target.value)} style={{flex:'0 0 130px'}}>
+                        <option value="none">ไม่มีส่วนลด</option>
+                        <option value="percent">ลด %</option>
+                        <option value="amount">ลด ฿</option>
+                      </select>
+                      {f.billing_discount_type && f.billing_discount_type!=='none' && (
+                        <input type="number" min={0} placeholder={f.billing_discount_type==='percent'?'%':'บาท'} value={f.billing_discount_value} onChange={e=>set('billing_discount_value',e.target.value)} style={{flex:1}}/>
+                      )}
+                    </div>
+                  </div>
+                  {selPkg && (
+                    <div style={{fontSize:13,background:'var(--surface-2)',borderRadius:8,padding:'9px 12px'}}>
+                      ยอดเรียกเก็บแต่ละรอบ: {net<base && <span style={{textDecoration:'line-through',color:'var(--text-3)',marginRight:6}}>{DATA.baht(base)}</span>}<b style={{color:'var(--primary-ink)'}}>{DATA.baht(net)}</b>
+                      {net<=0 && <span style={{color:'var(--danger)',marginLeft:8,fontSize:12}}>· ฿0 จะไม่ออกบิล</span>}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            ); })()}
           <div className="field"><label>ยอดค้างชำระ (฿)</label><input type="number" value={f.balance} onChange={e=>set("balance",e.target.value)}/></div>
           <div style={{marginTop:8,textAlign:'center'}}>
             <button className="btn btn-ghost btn-sm" style={{color:'var(--danger)'}} onClick={del} disabled={delBusy}>

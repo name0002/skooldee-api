@@ -153,6 +153,21 @@ r.patch('/:id', canManage, wrap((req, res) => {
     sets.push('categories_json = ?'); vals.push(arr.length ? JSON.stringify(arr) : null);
     if (!('category' in req.body)) { sets.push('category = ?'); vals.push(arr[0] || null); }
   }
+  // recurring auto-billing profile (validated — discount type/value sanitised, package must belong to school)
+  if ('billing_enabled' in req.body) { sets.push('billing_enabled = ?'); vals.push(req.body.billing_enabled ? 1 : 0); }
+  if ('billing_package_id' in req.body) {
+    const pid = req.body.billing_package_id || null;
+    if (pid && !get('SELECT id FROM packages WHERE id = ? AND school_id = ?', pid, req.schoolId)) throw bad('billing package not found', 404);
+    sets.push('billing_package_id = ?'); vals.push(pid);
+  }
+  if ('billing_category' in req.body) { sets.push('billing_category = ?'); vals.push(req.body.billing_category || null); }
+  if ('billing_discount_type' in req.body) {
+    const dt = ['percent', 'amount'].includes(req.body.billing_discount_type) ? req.body.billing_discount_type : null;
+    sets.push('billing_discount_type = ?'); vals.push(dt);
+  }
+  if ('billing_discount_value' in req.body) {
+    sets.push('billing_discount_value = ?'); vals.push(Math.max(0, parseInt(req.body.billing_discount_value) || 0));
+  }
   // multi-package: packages[] → packages_json + sync aggregate session totals
   if ('packages' in req.body) {
     const enr = buildEnrollments(req.body);

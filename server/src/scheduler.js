@@ -2,7 +2,9 @@
 // Fires once per Bangkok day after a target hour; idempotent via app_meta markers,
 // so a process restart never double-sends and a missed window catches up next tick.
 import { all, get, run } from './db.js';
-import { pushRaw, notifyPlatformOwner } from './line-push.js';
+import { pushRaw, notifyPlatformOwner, pushToParent } from './line-push.js';
+import { applyDiscount } from './routes/finance.js';
+import { nearLimitInfo } from './util.js';
 
 const TARGET_HOUR = Number(process.env.DAILY_NOTIFY_HOUR || 7); // Asia/Bangkok local hour
 const TICK_MS = 5 * 60 * 1000; // re-check every 5 minutes
@@ -147,6 +149,52 @@ async function runDaily(now) {
   for (const sch of trialSchools) {
     if (sch.plan_expires.slice(0, 10) === tmr.date) {
       await notifyPlatformOwner(`⚠️ ${sch.name} trial หมดอายุพรุ่งนี้ (${tmr.date})`);
+    }
+  }
+
+  // 5) usage-based recurring auto-billing (runs for ALL schools, not just LINE ones)
+  await runAutoBilling();
+}
+
+// ---- usage-based recurring billing -----------------------------------------
+// For every active student with auto-billing on, once their sessions drop to the
+// near-limit threshold, auto-issue the renewal invoice — carrying the student's own
+// stored discount — and (if linked) push the parent a LINE bill with the portal link.
+// Self-resetting: an open invoice for the same package blocks re-issue; once it's paid,
+// applyRenewal tops up the sessions so the student is no longer near-limit. Issuing a
+// ฿0 invoice (a 100%-discount/scholarship student) is skipped.
+export async function runAutoBilling() {
+  const APP_URL = process.env.APP_URL || 'https://skooldee.com';
+  const schools = all('SELECT id, near_limit_threshold FROM schools');
+  for (const school of schools) {
+    const threshold = school.near_limit_threshold || 2;
+    const students = all(
+      `SELECT * FROM students WHERE school_id = ? AND billing_enabled = 1 AND status = 'active'
+         AND billing_package_id IS NOT NULL`, school.id);
+    for (const s of students) {
+      try {
+        if (!nearLimitInfo(s, threshold).near) continue; // still has sessions — nothing to bill
+        // don't stack: skip if any open invoice for THIS package already exists (auto or manual)
+        const open = get(
+          `SELECT id FROM invoices WHERE school_id = ? AND student_id = ? AND package_id = ?
+             AND status IN ('unpaid','pending_verification') LIMIT 1`, school.id, s.id, s.billing_package_id);
+        if (open) continue;
+        const pkg = get('SELECT * FROM packages WHERE id = ? AND school_id = ?', s.billing_package_id, school.id);
+        if (!pkg) continue;
+        const { subtotal, dtype, dval, amount } = applyDiscount(pkg.price, s.billing_discount_type, s.billing_discount_value);
+        if (amount <= 0) continue; // free / 100%-discount student — don't issue a ฿0 invoice
+        const category = s.billing_category || s.category || null;
+        run(
+          `INSERT INTO invoices (school_id, student_id, package_id, amount, status, note, payment_method,
+             subtotal, discount_type, discount_value, category, auto_billed)
+           VALUES (?,?,?,?,'unpaid',?, 'qr', ?,?,?,?, 1)`,
+          school.id, s.id, pkg.id, amount, 'ออกบิลอัตโนมัติ (คาบใกล้หมด)', subtotal, dtype, dval, category);
+        // notify the linked parent (plan + LINE-link gated inside pushToParent)
+        const portal = `${APP_URL}/parent.html?token=${s.parent_token}`;
+        const discNote = dtype ? '\n(หักส่วนลดประจำตัวแล้ว)' : '';
+        await pushToParent(school.id, s.id,
+          `🧾 ใบแจ้งหนี้ค่าเรียนรอบใหม่ของน้อง${s.nickname || s.name}\nจำนวน ฿${Number(amount).toLocaleString()}${discNote}\nชำระเงิน / แนบสลิปได้ที่ 👉 ${portal}`);
+      } catch (e) { console.warn('[auto-billing] student', s.id, e && e.message); }
     }
   }
 }

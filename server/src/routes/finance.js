@@ -66,7 +66,7 @@ function applyRenewal(student, pkg, category) {
 }
 
 // compute net amount from a subtotal + discount (returns { subtotal, dtype, dval, amount })
-function applyDiscount(rawSubtotal, rawType, rawValue) {
+export function applyDiscount(rawSubtotal, rawType, rawValue) {
   const subtotal = Math.max(0, parseInt(rawSubtotal) || 0);
   const dtype = ['percent', 'amount'].includes(rawType) ? rawType : null;
   const dval = dtype ? Math.max(0, parseInt(rawValue) || 0) : 0;

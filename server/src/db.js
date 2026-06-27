@@ -463,6 +463,16 @@ export function initSchema() {
   // owner-set business targets, shown against the analytics/forecast on the Reports page.
   // JSON: { revenue_monthly, new_students_monthly, active_students } — 0/absent = not set.
   addCol('ALTER TABLE schools ADD COLUMN goals_json TEXT');
+  // per-student recurring auto-billing profile (usage-based: re-bill when sessions run low).
+  // The discount lives WITH the student so every auto-issued invoice carries it automatically.
+  addCol('ALTER TABLE students ADD COLUMN billing_enabled INTEGER NOT NULL DEFAULT 0');
+  addCol('ALTER TABLE students ADD COLUMN billing_package_id INTEGER');     // which package renews
+  addCol('ALTER TABLE students ADD COLUMN billing_category TEXT');          // which subject (multi-subject); null = primary
+  addCol('ALTER TABLE students ADD COLUMN billing_discount_type TEXT');     // percent | amount | null
+  addCol('ALTER TABLE students ADD COLUMN billing_discount_value INTEGER NOT NULL DEFAULT 0');
+  // marks an invoice the scheduler issued automatically (vs an admin-created one) — used
+  // both for the UI badge and to stop the daily job re-issuing while one is still open.
+  addCol('ALTER TABLE invoices ADD COLUMN auto_billed INTEGER NOT NULL DEFAULT 0');
   // backfill existing leads: the sign-up lead shares the owner's email → resolve its school
   try {
     run(`UPDATE leads SET school_id = (

@@ -27,6 +27,11 @@ function mapStudent(s){
     birthday:s.birthday||null,
     recipient:s.recipient_type||'parent',
     honorific:s.honorific||'auto',
+    billing_enabled:!!s.billing_enabled,
+    billing_package_id:s.billing_package_id||null,
+    billing_category:s.billing_category||null,
+    billing_discount_type:s.billing_discount_type||null,
+    billing_discount_value:s.billing_discount_value||0,
     packages:(function(){ try{ if(s.packages_json){ var a=JSON.parse(s.packages_json); if(Array.isArray(a)) return a; } }catch(e){} return []; })(),
   };
 }
@@ -512,6 +517,11 @@ function AuthRoot(){
         if('email'     in patch) ap.email     = patch.email;
         if('recipient' in patch) ap.recipient_type = patch.recipient;
         if('honorific' in patch) ap.honorific = patch.honorific==='auto' ? null : patch.honorific;
+        if('billing_enabled'        in patch) ap.billing_enabled        = patch.billing_enabled ? 1 : 0;
+        if('billing_package_id'     in patch) ap.billing_package_id     = patch.billing_package_id || null;
+        if('billing_category'       in patch) ap.billing_category       = patch.billing_category || null;
+        if('billing_discount_type'  in patch) ap.billing_discount_type  = patch.billing_discount_type || null;
+        if('billing_discount_value' in patch) ap.billing_discount_value = patch.billing_discount_value || 0;
         if('packages'  in patch){ ap.packages = patch.packages;
           s.packages = patch.packages.slice();
           s.remaining = patch.packages.reduce((a,p)=>a+(Number(p.sessions_remaining)||0),0);
