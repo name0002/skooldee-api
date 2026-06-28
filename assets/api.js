@@ -139,6 +139,12 @@
     acceptEnrollment:   function (id) { return req('/api/enrollments/' + id + '/accept', { method: 'POST' }); },
     rejectEnrollment:   function (id) { return req('/api/enrollments/' + id + '/reject', { method: 'POST' }); },
     deleteEnrollment:   function (id) { return req('/api/enrollments/' + id,             { method: 'DELETE' }); },
+    /* ---- Teacher leave requests ---- */
+    leaves:        function (s)      { return req('/api/leaves' + (s ? '?status=' + s : '')); },
+    createLeave:   function (d)      { return req('/api/leaves',                  { method: 'POST',   body: JSON.stringify(d) }); },
+    approveLeave:  function (id)     { return req('/api/leaves/' + id + '/approve', { method: 'POST' }); },
+    rejectLeave:   function (id, note){ return req('/api/leaves/' + id + '/reject', { method: 'POST', body: JSON.stringify({ note: note || null }) }); },
+    deleteLeave:   function (id)     { return req('/api/leaves/' + id,             { method: 'DELETE' }); },
 
     /* ---- Stripe billing ---- */
     stripeCheckout: function (plan, cycle) {

@@ -296,6 +296,10 @@ function AuthRoot(){
       DATA.ENROLLMENTS = canManage
         ? await window.API.enrollments('pending').catch(()=>[])
         : [];
+      // pending teacher-leave requests — owner/admin only (drives the Teachers-page badge)
+      DATA.LEAVES_PENDING = canManage && window.API.leaves
+        ? await window.API.leaves('pending').catch(()=>[])
+        : [];
 
       /* -- store raw school & user for Settings screen -- */
       DATA._schoolRaw = { ...school };
@@ -420,6 +424,13 @@ function AuthRoot(){
         const ex = DATA.EXCEPTIONS.find(x=>x._dbId===id||x.id===id);
         if(ex&&ex._dbId) await window.API.deleteException(ex._dbId);
         DATA.EXCEPTIONS = DATA.EXCEPTIONS.filter(x=>x!==ex);
+        bumpData();
+      };
+      // re-pull all exceptions (e.g. after an approved leave cancels several classes server-side)
+      DATA.reloadExceptions = async function(){
+        if(!window.API.scheduleExceptions) return;
+        const fresh = await window.API.scheduleExceptions();
+        DATA.EXCEPTIONS = (Array.isArray(fresh)?fresh:[]).map(mapExc);
         bumpData();
       };
 

@@ -347,6 +347,27 @@ CREATE TABLE IF NOT EXISTS chat_logs (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chat_logs_session ON chat_logs(session_id, created_at);
+
+-- Teacher leave requests: a teacher submits a leave for a date (or date range) from
+-- inside the app; an owner/admin approves or rejects it. On approval the teacher's
+-- recurring classes on those dates are cancelled (a schedule_exceptions 'cancel' row
+-- per affected slot/date) and the affected students' parents are notified over LINE.
+CREATE TABLE IF NOT EXISTS teacher_leaves (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+  teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  start_date TEXT NOT NULL,                       -- YYYY-MM-DD
+  end_date TEXT NOT NULL,                         -- inclusive; = start_date for a single day
+  leave_type TEXT NOT NULL DEFAULT 'personal',    -- sick | personal | other
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',         -- pending | approved | rejected
+  reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TEXT,
+  review_note TEXT,
+  cancelled_count INTEGER NOT NULL DEFAULT 0,     -- classes auto-cancelled on approval
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_teacher_leaves_school ON teacher_leaves(school_id, status);
 `;
 
 export function initSchema() {

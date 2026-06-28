@@ -164,6 +164,129 @@ function EnrollmentsPanel({ showToast, onClose }){
   );
 }
 
+/* ===================== TEACHER LEAVE REQUESTS PANEL ===================== */
+const LEAVE_TYPE_LABEL = { sick:'ลาป่วย', personal:'ลากิจ', other:'อื่น ๆ' };
+function TeacherLeavesPanel({ showToast, onClose, onChange }){
+  const [rows, setRows] = useState([]);
+  const [filter, setFilter] = useState('pending');
+  const [busy, setBusy] = useState(null);
+
+  const reload = async(status)=>{
+    try{
+      const r = await window.API.leaves(status !== 'all' ? status : undefined);
+      setRows(Array.isArray(r) ? r : []);
+    }catch{}
+  };
+  React.useEffect(()=>{ reload(filter); }, [filter]);
+
+  const THMON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const d1 = (iso)=>{ if(!iso) return '-'; const p=iso.slice(0,10).split('-'); return p.length===3 ? `${+p[2]} ${THMON[+p[1]-1]}` : iso; };
+  const rangeLabel = (l)=> l.start_date===l.end_date ? d1(l.start_date) : `${d1(l.start_date)} – ${d1(l.end_date)}`;
+  const submitted = (iso)=>{ if(!iso) return '-'; const p=iso.slice(0,10).split('-'); return p.length===3 ? `${+p[2]} ${THMON[+p[1]-1]}` : iso; };
+
+  const approve = async(l)=>{
+    if(!confirm(`อนุมัติการลาของ ${l.teacher_name} (${rangeLabel(l)})?\nระบบจะงดคาบของครูในวันนั้นและแจ้งผู้ปกครองให้อัตโนมัติ`)) return;
+    setBusy(l.id);
+    try{
+      const res = await window.API.approveLeave(l.id);
+      // a cancellation may have changed the week view → refresh exceptions if the app exposes it
+      if(DATA.reloadExceptions) await DATA.reloadExceptions().catch(()=>{});
+      await reload(filter);
+      if(onChange) onChange();
+      const extra = res && res.cancelled_count ? ` · งด ${res.cancelled_count} คาบ แจ้งผู้ปกครอง ${res.students_notified||0} คน` : '';
+      showToast('อนุมัติการลาแล้ว ✓'+extra);
+    }catch(e){ showToast(e.message||'เกิดข้อผิดพลาด ❌'); }
+    setBusy(null);
+  };
+  const reject = async(l)=>{
+    const note = prompt(`ปฏิเสธการลาของ ${l.teacher_name}?\n(ใส่เหตุผลถ้าต้องการ — จะส่งให้ครูทาง LINE)`, '');
+    if(note===null) return;
+    setBusy(l.id);
+    try{
+      await window.API.rejectLeave(l.id, note||null);
+      await reload(filter);
+      if(onChange) onChange();
+      showToast('ปฏิเสธการลาแล้ว');
+    }catch(e){ showToast(e.message||'เกิดข้อผิดพลาด ❌'); }
+    setBusy(null);
+  };
+  const del = async(l)=>{
+    if(!confirm(`ลบรายการลาของ ${l.teacher_name}?`)) return;
+    setBusy(l.id);
+    try{
+      await window.API.deleteLeave(l.id);
+      setRows(r=>r.filter(x=>x.id!==l.id));
+      if(onChange) onChange();
+      showToast('ลบแล้ว');
+    }catch(e){ showToast(e.message||'เกิดข้อผิดพลาด ❌'); }
+    setBusy(null);
+  };
+
+  const ST = { pending:{label:'รอพิจารณา',color:'#d97706',bg:'#fef3c7'}, approved:{label:'อนุมัติแล้ว',color:'#16a34a',bg:'#dcfce7'}, rejected:{label:'ปฏิเสธ',color:'#dc2626',bg:'#fee2e2'} };
+  const visible = rows.filter(r=>filter==='all'||r.status===filter);
+
+  return (
+    <div className="card" style={{ overflow:'hidden', marginBottom:18 }}>
+      <div className="card-pad" style={{ paddingBottom:0 }}>
+        <SectionHead title="คำขอลาของครู">
+          <button className="icon-btn" style={{ width:30, height:30, border:0, color:'var(--text-3)' }} title="ปิด" onClick={onClose}><Icon n="x" size={15}/></button>
+        </SectionHead>
+        <div style={{ display:'flex', gap:6, padding:'10px 0 12px', flexWrap:'wrap' }}>
+          {[['pending','รอพิจารณา'],['approved','อนุมัติแล้ว'],['rejected','ปฏิเสธ'],['all','ทั้งหมด']].map(([k,l])=>(
+            <button key={k} className={"chip"+(filter===k?" active":"")} onClick={()=>setFilter(k)}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {visible.length===0 ? (
+        <div style={{ textAlign:'center', padding:'28px 16px', color:'var(--text-3)', fontSize:13 }}>
+          ไม่มีคำขอลา{filter==='pending'?'รอพิจารณา':''}
+        </div>
+      ) : (
+        <table>
+          <thead><tr>
+            <th>ครู</th><th>ช่วงที่ลา</th><th className="hide-mobile">ประเภท</th>
+            <th className="hide-mobile">เหตุผล</th><th>สถานะ</th><th></th>
+          </tr></thead>
+          <tbody>
+            {visible.map(l=>{
+              const st = ST[l.status]||ST.pending;
+              return (
+                <tr key={l.id}>
+                  <td style={{ fontWeight:600 }}>{l.teacher_name}</td>
+                  <td style={{ whiteSpace:'nowrap' }}>{rangeLabel(l)}
+                    <div style={{ fontSize:11.5, color:'var(--text-3)' }}>แจ้ง {submitted(l.created_at)}</div>
+                  </td>
+                  <td className="hide-mobile" style={{ color:'var(--text-2)' }}>{LEAVE_TYPE_LABEL[l.leave_type]||l.leave_type}</td>
+                  <td className="hide-mobile" style={{ color:'var(--text-2)', maxWidth:200 }}>{l.reason ? (l.reason.slice(0,80)+(l.reason.length>80?'…':'')) : '-'}
+                    {l.status==='approved' && l.cancelled_count>0 && <div style={{ fontSize:11.5, color:'var(--text-3)' }}>งด {l.cancelled_count} คาบ</div>}
+                    {l.status==='rejected' && l.review_note && <div style={{ fontSize:11.5, color:'var(--danger)' }}>{l.review_note}</div>}
+                  </td>
+                  <td><span style={{ display:'inline-block', padding:'3px 10px', borderRadius:99, fontSize:12, fontWeight:600, background:st.bg, color:st.color }}>{st.label}</span></td>
+                  <td>
+                    <div style={{ display:'flex', gap:4, justifyContent:'flex-end', alignItems:'center' }}>
+                      {l.status==='pending' && (<>
+                        <button className="btn btn-sm" disabled={busy===l.id}
+                          style={{ background:'var(--ok)', color:'#fff', border:'none', fontSize:12, padding:'4px 10px', whiteSpace:'nowrap' }}
+                          onClick={()=>approve(l)}>{busy===l.id?'…':'✓ อนุมัติ'}</button>
+                        <button className="btn btn-sm" disabled={busy===l.id}
+                          style={{ color:'var(--danger)', border:'1px solid var(--danger)', background:'transparent', fontSize:12, padding:'4px 8px' }}
+                          onClick={()=>reject(l)}>ปฏิเสธ</button>
+                      </>)}
+                      <button className="icon-btn" style={{ width:30, height:30, border:0, color:'var(--text-3)' }} title="ลบ" onClick={()=>del(l)}>
+                        <Icon n="x" size={14}/>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 function Students(){
   useDataVersion();
   // pre-fill from topbar global search — sync only when it CHANGES, otherwise the
@@ -1516,12 +1639,31 @@ function Teachers(){
   const [sel, setSel] = useState(null);
   const [adding, setAdding] = useState(false);
   const [toast, showToast] = useToast();
+  const [pendingLeaves, setPendingLeaves] = useState(()=> (DATA.LEAVES_PENDING||[]).length);
+  const [showLeaves, setShowLeaves] = useState(()=> (DATA.LEAVES_PENDING||[]).length>0);
+  // keep the badge fresh: re-count pending leaves whenever the panel reports a change
+  const refreshLeaveCount = async()=>{
+    if(!DATA._isLiveMode || !window.API) return;
+    try{ const p = await window.API.leaves('pending'); DATA.LEAVES_PENDING = p||[]; setPendingLeaves((p||[]).length); }catch{}
+  };
   return (
     <div className="content-inner">
       <div className="section-head">
         <div className="page-sub" style={{ fontSize:14, color:"var(--text-2)" }}>ครูผู้สอน {DATA.TEACHERS.length} คน · ค่าสอนคำนวณตามจำนวนชั่วโมงจริง</div>
-        <button className="btn btn-primary" onClick={()=>setAdding(true)}><Icon n="plus" size={18}/> เพิ่มครู</button>
+        <div style={{ display:"flex", gap:8 }}>
+          {DATA._isLiveMode && (
+            <button className="btn btn-sm" onClick={()=>setShowLeaves(v=>!v)}
+              style={ pendingLeaves>0 ? { background:'#0ea5e9', color:'#fff', border:'none', position:'relative' } : { position:'relative' } }>
+              🌴 คำขอลา{pendingLeaves>0 && <span className="nav-badge" style={{ background:'#fff', color:'#0ea5e9', top:-6, right:-6 }}>{pendingLeaves}</span>}
+            </button>
+          )}
+          <button className="btn btn-primary" onClick={()=>setAdding(true)}><Icon n="plus" size={18}/> เพิ่มครู</button>
+        </div>
       </div>
+
+      {showLeaves && DATA._isLiveMode && window.API && (
+        <TeacherLeavesPanel showToast={showToast} onClose={()=>setShowLeaves(false)} onChange={refreshLeaveCount}/>
+      )}
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:16, marginTop:14 }}>
         {DATA.TEACHERS.map(t=>{

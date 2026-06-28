@@ -22,6 +22,7 @@ import users from './routes/users.js';
 import assessments from './routes/assessments.js';
 import staffEvaluations from './routes/staffEvaluations.js';
 import enrollments from './routes/enrollments.js';
+import leaves from './routes/leaves.js';
 import stripeRoutes from './routes/stripe.js';
 import adminRoutes from './routes/admin.js';
 import richMenu from './routes/richmenu.js';
@@ -81,6 +82,7 @@ export function createApp() {
   app.use('/api/schools', schools);
   app.use('/api/rich-menu', richMenu);
   app.use('/api/enrollments', enrollments);
+  app.use('/api/leaves', leaves);
   app.use('/api/admin', adminRoutes);
 
   app.use((req, res) => res.status(404).json({ error: 'not found' }));

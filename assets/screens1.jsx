@@ -340,6 +340,7 @@ function Schedule(){
   const [makeupOpen, setMakeupOpen] = useState(false);
   const [eventsOpen, setEventsOpen] = useState(false); // events & holidays manager
   const [sessionsOpen, setSessionsOpen] = useState(false); // self-service booking manager
+  const [leaveOpen, setLeaveOpen] = useState(false); // teacher leave-request drawer
   const [viewMode, setViewMode] = useState("day"); // "day" = columns are weekdays · "room" = columns are rooms
   const [roomDay, setRoomDay] = useState(()=> typeof DATA._todayDow==='number' ? DATA._todayDow : (new Date().getDay()+6)%7);
 
@@ -496,6 +497,7 @@ function Schedule(){
             <button className={"btn btn-sm"+(viewMode==="day"?" btn-primary":" btn-ghost")} style={{ height:32, padding:"0 12px" }} onClick={()=>setViewMode("day")} title="ดูตารางตามวัน"><Icon n="calendar" size={14}/> <span className="hide-mobile">ตามวัน</span></button>
             <button className={"btn btn-sm"+(viewMode==="room"?" btn-primary":" btn-ghost")} style={{ height:32, padding:"0 12px" }} onClick={()=>setViewMode("room")} title="ดูตารางตามห้องเรียน">🚪 <span className="hide-mobile">ตามห้อง</span></button>
           </div>
+          <button className="btn btn-ghost" onClick={()=>setLeaveOpen(true)} title="แจ้งลา / บันทึกการลาของครู">🌴 <span className="hide-mobile">แจ้งลา</span></button>
           <button className="btn btn-ghost" onClick={()=>setMakeupOpen(true)} title="เพิ่มคาบเรียนชดเชยครั้งเดียว"><Icon n="plus" size={16}/> ชดเชย</button>
           <button className="btn btn-ghost" onClick={()=>setEventsOpen(true)} title="เพิ่มอีเว้นท์หรือวันหยุดของโรงเรียน">🎉 <span className="hide-mobile">อีเว้นท์/วันหยุด</span></button>
           {DATA._isLiveMode && <button className="btn btn-ghost" onClick={()=>setSessionsOpen(true)} title="เปิดคลาสให้ผู้ปกครอง/นักเรียนจองออนไลน์เอง">📅 <span className="hide-mobile">จองออนไลน์</span></button>}
@@ -667,6 +669,7 @@ function Schedule(){
       {booking && <BookingDrawer slot={booking} onClose={()=>setBooking(null)} onSave={()=>{ setBooking(null); showToast("จองคาบเรียนสำเร็จ"); }}/>}
       {makeupOpen && <MakeupDrawer onClose={()=>setMakeupOpen(false)} onSave={()=>{ setMakeupOpen(false); showToast("เพิ่มคาบชดเชยแล้ว ✓"); }}/>}
       {eventsOpen && <EventsDrawer onClose={()=>setEventsOpen(false)} showToast={showToast}/>}
+      {leaveOpen && <LeaveRequestDrawer onClose={()=>setLeaveOpen(false)} showToast={showToast}/>}
       {sessionsOpen && <BookableSessionsManager onClose={()=>setSessionsOpen(false)} showToast={showToast}/>}
       {moveAsk && (
         <Drawer title="ย้ายคาบเรียน"
@@ -1003,6 +1006,107 @@ function EventsDrawer({ onClose, showToast }){
             </div>
           ))}
         </div>
+      </div>
+    </Drawer>
+  );
+}
+
+/* ---- Teacher leave request: a teacher submits a leave (single day or range) for admin
+   approval. Owner/admin can also log a leave on behalf of any teacher (with a picker).
+   On approval (handled server-side) the teacher's classes on those dates are cancelled
+   and the affected parents are notified over LINE. ---- */
+const LEAVE_TYPES = [
+  { key:'sick',     label:'ลาป่วย',  icon:'🤒' },
+  { key:'personal', label:'ลากิจ',   icon:'📋' },
+  { key:'other',    label:'อื่น ๆ',  icon:'📝' },
+];
+function LeaveRequestDrawer({ onClose, showToast }){
+  const _today = new Date().toISOString().slice(0,10);
+  // scope 'own' = a teacher logging in → the request is always for themselves.
+  const scopeOwn = !!(DATA._perms && DATA._perms.scope==='own');
+  const selfTeacherId = DATA._userRaw && DATA._userRaw.teacher_id;
+  const selfTeacher = scopeOwn ? DATA.TEACHERS.find(t=>(t._dbId??t.id)===selfTeacherId) : null;
+
+  const [teacherId,setTeacherId] = useState(scopeOwn ? (selfTeacherId||'') : (DATA.TEACHERS[0]?._dbId??DATA.TEACHERS[0]?.id??''));
+  const [type,setType]   = useState('personal');
+  const [date,setDate]   = useState(_today);
+  const [multi,setMulti] = useState(false);
+  const [endDate,setEnd] = useState('');
+  const [reason,setReason] = useState('');
+  const [busy,setBusy]   = useState(false);
+  const [err,setErr]     = useState(null);
+
+  // a teacher account that was never linked to a teacher record can't file a leave
+  const blocked = scopeOwn && !selfTeacherId;
+
+  const submit = async()=>{
+    if(blocked){ setErr('บัญชีนี้ยังไม่ได้เชื่อมกับข้อมูลครู ติดต่อผู้ดูแลระบบ'); return; }
+    if(!scopeOwn && !teacherId){ setErr('กรุณาเลือกครู'); return; }
+    if(!date){ setErr('กรุณาเลือกวันที่ลา'); return; }
+    if(multi && endDate && endDate < date){ setErr('วันสิ้นสุดต้องไม่อยู่ก่อนวันเริ่ม'); return; }
+    setBusy(true); setErr(null);
+    const payload = {
+      start_date: date,
+      end_date: (multi && endDate) ? endDate : date,
+      leave_type: type,
+      reason: reason.trim() || null,
+    };
+    if(!scopeOwn) payload.teacher_id = teacherId; // server forces self for scoped teachers
+    try{
+      await window.API.createLeave(payload);
+      showToast(scopeOwn ? 'ส่งคำขอลาแล้ว รอผู้ดูแลอนุมัติ ✓' : 'บันทึกการลาแล้ว รออนุมัติ ✓');
+      onClose();
+    }catch(e){ setErr(e.message||'ส่งคำขอไม่สำเร็จ'); setBusy(false); }
+  };
+
+  return (
+    <Drawer title="แจ้งลา (ครู)" sub="ส่งคำขอลาให้ผู้ดูแลอนุมัติ — เมื่ออนุมัติ ระบบจะงดคาบในวันนั้นและแจ้งผู้ปกครองให้อัตโนมัติ" onClose={onClose} accent="#0ea5e9"
+      footer={<>
+        <button className="btn btn-ghost" style={{flex:1}} onClick={onClose} disabled={busy}>ยกเลิก</button>
+        <button className="btn btn-primary" style={{flex:1}} onClick={submit} disabled={busy||blocked||!date||(!scopeOwn&&!teacherId)}>
+          {busy?'กำลังส่ง…':<><Icon n="check" size={16}/> ส่งคำขอลา</>}
+        </button>
+      </>}>
+      {err && <div style={{background:'var(--danger-soft)',color:'var(--danger)',borderRadius:8,padding:'9px 13px',fontSize:13,marginBottom:12}}>{err}</div>}
+      {blocked && <div style={{background:'#fffbeb',color:'#b45309',borderRadius:8,padding:'9px 13px',fontSize:13,marginBottom:12}}>บัญชีของคุณยังไม่ได้เชื่อมกับข้อมูลครู กรุณาให้ผู้ดูแลผูกบัญชีก่อน</div>}
+
+      <div className="field"><label>ครูที่ลา</label>
+        {scopeOwn ? (
+          <input value={selfTeacher ? (selfTeacher.nick||selfTeacher.name) : 'คุณ'} disabled style={{ background:'var(--surface-2)', color:'var(--text-2)' }}/>
+        ) : (
+          <select value={teacherId} onChange={e=>setTeacherId(Number(e.target.value)||'')}>
+            {DATA.TEACHERS.map(t=><option key={t.id} value={t._dbId??t.id}>{t.nick||t.name}</option>)}
+            {!DATA.TEACHERS.length && <option value="">— ยังไม่มีครู —</option>}
+          </select>
+        )}
+      </div>
+
+      <div className="field"><label>ประเภทการลา</label>
+        <div className="tag-filter">
+          {LEAVE_TYPES.map(lt=>(
+            <button key={lt.key} className={"chip"+(type===lt.key?" active":"")} onClick={()=>setType(lt.key)}>{lt.icon} {lt.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{display:"flex",gap:12}}>
+        <div className="field" style={{flex:1}}><label>{multi?'วันเริ่มลา':'วันที่ลา'}</label>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)}/>
+        </div>
+        {multi && (
+          <div className="field" style={{flex:1}}><label>ถึงวันที่</label>
+            <input type="date" value={endDate} min={date} onChange={e=>setEnd(e.target.value)}/>
+          </div>
+        )}
+      </div>
+      <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'var(--text-2)',cursor:'pointer',marginBottom:6}}>
+        <input type="checkbox" checked={multi} onChange={e=>{ setMulti(e.target.checked); if(!e.target.checked) setEnd(''); else if(!endDate) setEnd(date); }}/>
+        ลาหลายวัน
+      </label>
+
+      <div className="field"><label>เหตุผล (ไม่บังคับ)</label>
+        <textarea value={reason} maxLength={500} rows={3} onChange={e=>setReason(e.target.value)}
+          placeholder="เช่น มีนัดหมอ / ติดธุระครอบครัว" style={{ resize:'vertical' }}/>
       </div>
     </Drawer>
   );
