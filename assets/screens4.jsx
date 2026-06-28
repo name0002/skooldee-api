@@ -62,7 +62,7 @@ function Homework(){
                   <CatBadge cat={h.cat} small/>
                   {h.notified && <span className="badge" style={{ background:"color-mix(in oklch,#06c755 14%,white)", color:"#057a3e", fontSize:11 }}><Icon n="check" size={12}/> แจ้งแล้ว</span>}
                 </div>
-                <div style={{ fontSize:13, color:"var(--text-2)", marginTop:5 }}>{DATA.dispName(h.student)} · {h.teacher}{h.detail&&h.detail!=="-"?` · ${h.detail}`:""}</div>
+                <div style={{ fontSize:13, color:"var(--text-2)", marginTop:5 }}>{DATA.dispName(h.student)}{h.teacher&&h.teacher!=="-"?` · ${h.teacher}`:""}{h.detail&&h.detail!=="-"?` · ${h.detail}`:""}</div>
                 <div style={{ fontSize:12.5, marginTop:4, color: over?"var(--danger)":"var(--text-3)", fontWeight: over?700:400 }}>
                   <Icon n="clock" size={13}/> ส่งภายใน {h.due}{over?" · เกินกำหนด":""}
                 </div>
@@ -84,7 +84,7 @@ function Homework(){
         {list.length===0 && <div className="card empty">ไม่มีการบ้านในหมวดนี้</div>}
       </div>
 
-      {assign && <HomeworkAssign onClose={()=>setAssign(false)} onSaved={(notify)=>{ setAssign(false); showToast(notify?"มอบหมาย + แจ้ง LINE แล้ว":"บันทึกการบ้านแล้ว"); }}/>}
+      {assign && <HomeworkAssign onClose={()=>setAssign(false)} onSaved={(notify,n)=>{ setAssign(false); const who=n>1?` (${n} คน)`:""; showToast((notify?"มอบหมาย + แจ้ง LINE แล้ว":"บันทึกการบ้านแล้ว")+who); }}/>}
       {line && <LineNotify student={DATA.STUDENTS.find(s=>s._dbId===line._studentDbId)||DATA.findStudent(line.student)||{name:line.student,cats:[line.cat],dur:60,guardian:"-",phone:"-",remaining:0,_dbId:line._studentDbId||null}} homework={line}
         onClose={()=>setLine(null)} onSent={(r)=>{ if(r&&r.sent){ DATA.updateHomework(line.id,{notified:true}); bumpData(); } setLine(null); showToast(DATA.lineResultMsg(r,"ส่งการบ้านผ่าน LINE แล้ว ✓")); }}/>}
       {toast}
@@ -92,8 +92,13 @@ function Homework(){
   );
 }
 
+// teacher label helper: show the teacher only when one is actually set (drop the "(-)" noise)
+function hwTeacherLabel(s){ const t=s&&s.teacher; return (t && t!=='-' && String(t).trim()) ? String(t).trim() : ''; }
+
 function HomeworkAssign({ onClose, onSaved }){
-  const [sid, setSid] = useState(DATA.STUDENTS[0]?.id||"");
+  // multi-select: a Set of student ids that will all receive this homework
+  const [sids, setSids] = useState(()=> new Set());
+  const [q, setQ] = useState("");                 // student search box
   const [title, setTitle] = useState("");
   const [detail, setDetail] = useState("");
   // default due date = 7 days from today
@@ -104,12 +109,45 @@ function HomeworkAssign({ onClose, onSaved }){
     catch(e){ return true; }
   });
   useEffect(()=>{ const h=(e)=>e.key==="Escape"&&onClose(); window.addEventListener("keydown",h); return ()=>window.removeEventListener("keydown",h); },[]);
-  const stu = DATA.STUDENTS.find(s=>s.id===sid);
+
+  // filter the roster by name / nickname / teacher / category label
+  const needle = q.trim().toLowerCase();
+  const shown = DATA.STUDENTS.filter(s=>{
+    if(!needle) return true;
+    const c = DATA.CATS[s.cats&&s.cats[0]];
+    return [s.name, s.nickname, s.teacher, c&&c.label].some(v=> v && String(v).toLowerCase().includes(needle));
+  });
+
+  const toggle = (id)=> setSids(prev=>{ const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
+  const allShownSelected = shown.length>0 && shown.every(s=>sids.has(s.id));
+  const toggleAllShown = ()=> setSids(prev=>{
+    const n=new Set(prev);
+    if(allShownSelected) shown.forEach(s=>n.delete(s.id));
+    else shown.forEach(s=>n.add(s.id));
+    return n;
+  });
+
+  // "use again" — distinct recent homework titles (HOMEWORK is newest-first) for one-tap reuse
+  const recent = (()=>{
+    const seen=new Set(), out=[];
+    for(const h of (DATA.HOMEWORK||[])){
+      const t=(h.title||'').trim(); if(!t||seen.has(t)) continue;
+      seen.add(t); out.push({ title:t, detail:(h.detail&&h.detail!=='-')?h.detail:'' });
+      if(out.length>=6) break;
+    }
+    return out;
+  })();
+
+  const canSave = !!title.trim() && sids.size>0;
   const save = ()=>{
-    if(!title.trim()||!stu) return;
-    DATA.addHomework({ _studentDbId:stu._dbId, student:stu.name, cat:stu.cats[0]||'piano', teacher:stu.teacher||'-', title:title.trim(), detail:detail.trim()||"-", due, notified:notify });
-    bumpData(); onSaved(notify);
+    if(!canSave) return;
+    const picked = DATA.STUDENTS.filter(s=>sids.has(s.id));
+    picked.forEach(stu=>{
+      DATA.addHomework({ _studentDbId:stu._dbId, student:stu.name, cat:(stu.cats&&stu.cats[0])||'piano', teacher:stu.teacher||'-', title:title.trim(), detail:detail.trim()||"-", due, notified:notify });
+    });
+    bumpData(); onSaved(notify, picked.length);
   };
+
   return (
     <>
       <div className="scrim" onClick={onClose}></div>
@@ -123,11 +161,54 @@ function HomeworkAssign({ onClose, onSaved }){
           <button className="icon-btn" onClick={onClose}><Icon n="x" size={18}/></button>
         </div>
         <div className="modal-body" style={{ background:"var(--surface)" }}>
-          <div className="field"><label>นักเรียน</label>
-            <select value={sid} onChange={e=>setSid(e.target.value)}>
-              {DATA.STUDENTS.map(s=>{ const c=DATA.CATS[s.cats&&s.cats[0]]; return <option key={s.id} value={s.id}>{s.name}{c?` · ${c.label}`:""} ({s.teacher})</option>; })}
-            </select>
+          <div className="field">
+            <label style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+              <span>นักเรียน</span>
+              {sids.size>0 && <span style={{ color:"var(--primary)", fontWeight:700, fontSize:12.5 }}>เลือก {sids.size} คน</span>}
+            </label>
+            <div style={{ position:"relative" }}>
+              <span style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", color:"var(--text-3)", pointerEvents:"none", display:"flex" }}><Icon n="search" size={15}/></span>
+              <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาชื่อนักเรียน / ครู / วิชา..." style={{ paddingLeft:32 }}/>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", margin:"8px 2px 6px" }}>
+              <button type="button" className="btn btn-sm btn-ghost" style={{ padding:"3px 8px", fontSize:12.5 }} onClick={toggleAllShown}>
+                {allShownSelected ? "ยกเลิกที่แสดง" : `เลือกทั้งหมด${needle?" ที่ค้นหา":""} (${shown.length})`}
+              </button>
+              {sids.size>0 && <button type="button" className="btn btn-sm btn-ghost" style={{ padding:"3px 8px", fontSize:12.5, color:"var(--text-3)" }} onClick={()=>setSids(new Set())}>ล้างทั้งหมด</button>}
+            </div>
+            <div style={{ maxHeight:208, overflowY:"auto", border:"1px solid var(--border)", borderRadius:10, padding:4, background:"var(--surface-2)" }}>
+              {shown.map(s=>{
+                const c = DATA.CATS[s.cats&&s.cats[0]];
+                const tl = hwTeacherLabel(s);
+                const sel = sids.has(s.id);
+                return (
+                  <label key={s.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 8px", borderRadius:8, cursor:"pointer", background: sel?"color-mix(in oklch, var(--primary) 9%, transparent)":"transparent" }}>
+                    <input type="checkbox" checked={sel} onChange={()=>toggle(s.id)} style={{ width:17, height:17, accentColor:"var(--primary)" }}/>
+                    <Avatar name={s.name} size={28}/>
+                    <span style={{ flex:1, minWidth:0, fontSize:13.5, fontWeight: sel?600:400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                      {s.name}{c?` · ${c.label}`:""}{tl?` · ${tl}`:""}
+                    </span>
+                  </label>
+                );
+              })}
+              {shown.length===0 && <div style={{ padding:"16px 8px", textAlign:"center", color:"var(--text-3)", fontSize:13 }}>ไม่พบนักเรียนที่ค้นหา</div>}
+            </div>
           </div>
+          {recent.length>0 && (
+            <div className="field">
+              <label style={{ display:"flex", alignItems:"center", gap:6 }}><Icon n="clock" size={14}/> ใช้ซ้ำการบ้านล่าสุด</label>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
+                {recent.map((r,i)=>{
+                  const active = title.trim()===r.title;
+                  return (
+                    <button type="button" key={i} className={"chip"+(active?" active":"")} title={r.detail||r.title}
+                      onClick={()=>{ setTitle(r.title); if(r.detail) setDetail(r.detail); }}
+                      style={{ maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.title}</button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="field"><label>หัวข้อการบ้าน</label><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="เช่น ฝึกสเกล C เมเจอร์"/></div>
           <div className="field"><label>รายละเอียด</label><textarea rows={3} value={detail} onChange={e=>setDetail(e.target.value)} placeholder="คำอธิบายเพิ่มเติม / สิ่งที่ต้องฝึก"></textarea></div>
           <div className="field"><label>กำหนดส่ง</label><input type="date" value={due} onChange={e=>setDue(e.target.value)}/></div>
@@ -138,7 +219,9 @@ function HomeworkAssign({ onClose, onSaved }){
         </div>
         <div className="modal-foot">
           <button className="btn btn-ghost" style={{ flex:1 }} onClick={onClose}>ยกเลิก</button>
-          <button className="btn btn-primary" style={{ flex:1.4 }} onClick={save}><Icon n="check" size={17}/> บันทึกการบ้าน</button>
+          <button className="btn btn-primary" style={{ flex:1.4 }} onClick={save} disabled={!canSave} title={!canSave?"เลือกนักเรียนและกรอกหัวข้อก่อน":""}>
+            <Icon n="check" size={17}/> บันทึกการบ้าน{sids.size>1?` (${sids.size})`:""}
+          </button>
         </div>
       </div>
     </>
