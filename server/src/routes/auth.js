@@ -14,7 +14,11 @@ r.post('/register', wrap((req, res) => {
   if (String(password).length < 6) throw bad('password must be at least 6 characters');
   if (get('SELECT id FROM users WHERE email = ?', email)) throw bad('email already registered', 409);
 
-  const slug = String(school).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `school-${Date.now()}`;
+  const baseSlug = String(school).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `school-${Date.now()}`;
+  // slug is UNIQUE — append -2, -3, … so two schools with the same name don't hit the
+  // constraint and 500 (which also leaked the raw SQL error to the client).
+  let slug = baseSlug;
+  for (let n = 2; get('SELECT id FROM schools WHERE slug = ?', slug); n++) slug = `${baseSlug}-${n}`;
   const sch = run('INSERT INTO schools (name, slug, category) VALUES (?, ?, ?)', school, slug, category || null);
   const schoolId = Number(sch.lastInsertRowid);
   // start 14-day free trial
