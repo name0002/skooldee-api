@@ -31,6 +31,17 @@ function getPriceId(planKey) {
   return { priceId: id, plan: cfg.plan };
 }
 
+// Reverse of PLAN_PRICES: a live Stripe Price ID → our plan key. This is the authoritative
+// source for entitlements — a subscription's metadata.plan goes STALE after a Customer-Portal
+// plan switch (Stripe changes the price item, not the metadata), so derive from the price.
+function planForPrice(priceId) {
+  if (!priceId) return null;
+  for (const { plan, env } of Object.values(PLAN_PRICES)) {
+    if (process.env[env] && process.env[env] === priceId) return plan;
+  }
+  return null;
+}
+
 // POST /api/stripe/create-checkout
 // Body: { plan: 'starter'|'pro', cycle: 'mo'|'yr' }
 // Returns: { url } — redirect the browser to this URL
@@ -104,14 +115,16 @@ r.post('/webhook', wrap(async (req, res) => {
 
   if (event.type === 'checkout.session.completed') {
     const schoolId = Number(obj.metadata?.school_id);
-    const plan     = obj.metadata?.plan || 'pro';
+    let plan       = obj.metadata?.plan;
     const subId    = obj.subscription;
     if (schoolId) {
       let expires = new Date(Date.now() + 31 * 86400_000).toISOString();
       if (subId) {
         const sub = await s.subscriptions.retrieve(subId);
         if (sub.current_period_end) expires = new Date(sub.current_period_end * 1000).toISOString();
+        plan = planForPrice(sub.items?.data?.[0]?.price?.id) || plan; // price is authoritative
       }
+      if (!plan || !PLANS[plan]) plan = 'studio'; // never persist an unknown plan key (was 'pro')
       run('UPDATE schools SET plan = ?, plan_expires = ?, stripe_subscription_id = ? WHERE id = ?',
         plan, expires, subId || null, schoolId);
       const school = get('SELECT name FROM schools WHERE id = ?', schoolId);
@@ -122,7 +135,11 @@ r.post('/webhook', wrap(async (req, res) => {
   if (event.type === 'customer.subscription.updated') {
     const school = get('SELECT id, name, plan FROM schools WHERE stripe_customer_id = ?', obj.customer);
     if (school) {
-      const plan    = obj.metadata?.plan || 'pro';
+      // derive from the actual price first (survives Customer-Portal plan switches); fall back
+      // to metadata, then keep the current plan — never invent the invalid 'pro' (it failed
+      // open: effectivePlan('pro') resolves to trial = unlimited).
+      let plan = planForPrice(obj.items?.data?.[0]?.price?.id) || obj.metadata?.plan;
+      if (!plan || !PLANS[plan]) plan = school.plan;
       const expires = new Date(obj.current_period_end * 1000).toISOString();
       const active  = ['active', 'trialing'].includes(obj.status);
       run('UPDATE schools SET plan = ?, plan_expires = ? WHERE id = ?',
