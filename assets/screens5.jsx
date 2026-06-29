@@ -4,7 +4,11 @@
 function Settings({ go }){
   useDataVersion();
   const [toast, showToast] = useToast();
-  const [section, setSection] = useState('school'); // 'school' | 'categories' | 'profile' | 'account'
+  // default tab is 'school'; the sidebar plan chip can deep-link to 'plan' via localStorage
+  const [section, setSection] = useState(()=>{
+    try { const s = localStorage.getItem('bm-settings-section'); if(s){ localStorage.removeItem('bm-settings-section'); return s; } } catch {}
+    return 'school';
+  });
 
   const tab = (id, label)=>(
     <button
@@ -24,6 +28,7 @@ function Settings({ go }){
     <div style={{ maxWidth:700, margin:'0 auto', padding:'4px 0 40px' }}>
       {/* tabs */}
       <div style={{ display:'flex', gap:8, marginBottom:28, flexWrap:'wrap' }}>
+        {tab('plan',       '💎 แพ็กเกจของฉัน')}
         {tab('school',     '🏫 ข้อมูลโรงเรียน')}
         {tab('goals',      '🎯 เป้าหมายธุรกิจ')}
         {tab('categories', '🎨 ประเภทวิชา')}
@@ -38,6 +43,7 @@ function Settings({ go }){
         {tab('account',    '🔐 บัญชีและความปลอดภัย')}
       </div>
 
+      {section==='plan'        && <SubscriptionSettingsSection/>}
       {section==='school'      && <SchoolSettingsSection showToast={showToast}/>}
       {section==='goals'       && <GoalsSettingsSection showToast={showToast}/>}
       {section==='categories'  && <CategoriesSettingsSection showToast={showToast}/>}
@@ -64,6 +70,53 @@ function SettingsCard({ title, sub, children }){
       {sub && <div style={{ color:'var(--text-2)', fontSize:13, marginBottom:18 }}>{sub}</div>}
       {children}
     </div>
+  );
+}
+
+/* ---- แพ็กเกจของฉัน (current subscription plan) ---- */
+function SubscriptionSettingsSection(){
+  useDataVersion();
+  const sch  = DATA._schoolRaw || {};
+  const plan = sch.plan || 'trial';
+  const m    = planMeta(plan);
+  const days = planDaysLeft(sch.plan_expires);
+  const expired = plan==='cancelled' || (days!==null && days<=0);
+  const fmtDate = (iso)=>{
+    if(!iso) return '—';
+    try { return new Date(iso).toLocaleDateString('th-TH', { year:'numeric', month:'long', day:'numeric' }); }
+    catch { return '—'; }
+  };
+  // status line: trial = countdown, paid+valid = active, otherwise expired
+  const status = expired
+    ? { c:'var(--danger)', t:'หมดอายุแล้ว' }
+    : plan==='trial'
+      ? { c:'#1D4ED8', t:'กำลังทดลองใช้งาน' }
+      : { c:'#065F46', t:'ใช้งานอยู่' };
+  const expiryLabel = plan==='trial' ? 'ทดลองใช้ถึง' : 'ต่ออายุ/หมดอายุ';
+
+  const row = (k, v)=>(
+    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:14,
+      padding:'12px 0', borderTop:'1px solid var(--border)' }}>
+      <span style={{ fontSize:13, color:'var(--text-2)' }}>{k}</span>
+      <span style={{ fontSize:13.5, fontWeight:600, textAlign:'right' }}>{v}</span>
+    </div>
+  );
+
+  return (
+    <SettingsCard title="แพ็กเกจปัจจุบัน" sub="แพ็กเกจการใช้งานและสถานะการสมัครของโรงเรียนคุณ">
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:6 }}>
+        <PlanBadge plan={plan}/>
+        <span style={{ fontSize:13, fontWeight:600, color:status.c }}>● {status.t}</span>
+      </div>
+      {row(expiryLabel, fmtDate(sch.plan_expires))}
+      {days!==null && row('เหลือเวลา', expired ? <span style={{ color:'var(--danger)' }}>หมดแล้ว</span> : `${days} วัน`)}
+      {expired && (
+        <div style={{ marginTop:16, padding:'12px 14px', borderRadius:'var(--radius)',
+          background:'var(--danger-soft)', fontSize:12.5, color:'color-mix(in oklch,var(--danger) 80%,black)' }}>
+          แพ็กเกจหมดอายุแล้ว — บางฟีเจอร์อาจถูกจำกัด กรุณาต่ออายุเพื่อใช้งานต่อเนื่อง
+        </div>
+      )}
+    </SettingsCard>
   );
 }
 

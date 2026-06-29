@@ -455,4 +455,31 @@ function TierBadge({ points, small }){
 }
 window.TierBadge = TierBadge;
 
-Object.assign(window, { Icon, Avatar, CatBadge, StatusBadge, Progress, BarChart, Donut, Drawer, useToast, SectionHead, bumpData, useDataVersion, LineNotify, TierBadge });
+/* ---- แพ็กเกจการสมัครใช้งาน (subscription plan) ---- */
+// Display metadata mirrors server plans.js keys + labels. Used by the sidebar
+// chip and the Settings → "แพ็กเกจของฉัน" card so every plan (paid or trial)
+// shows what it's on.
+const PLAN_META = {
+  trial:      { label:'ทดลองใช้',   bg:'#EFF6FF', c:'#1D4ED8' },
+  studio:     { label:'STUDIO',     bg:'#F5F3FF', c:'#6D28D9' },
+  academy:    { label:'ACADEMY',    bg:'#ECFDF5', c:'#065F46' },
+  enterprise: { label:'ENTERPRISE', bg:'#FFF7ED', c:'#92400E' },
+  cancelled:  { label:'หมดอายุ',    bg:'#FEF2F2', c:'#991B1B' },
+};
+function planMeta(plan){ return PLAN_META[plan] || PLAN_META.cancelled; }
+// days until plan_expires (negative if already past); null when no expiry set
+function planDaysLeft(expires){ return expires ? Math.ceil((new Date(expires)-Date.now())/86400_000) : null; }
+function PlanBadge({ plan, small }){
+  const m = planMeta(plan);
+  return (
+    <span style={{ fontSize: small?10.5:12, fontWeight:800, letterSpacing:'.02em', borderRadius:6,
+      padding: small?'2px 7px':'3px 10px', background:m.bg, color:m.c, whiteSpace:'nowrap' }}>
+      {m.label}
+    </span>
+  );
+}
+window.planMeta = planMeta;
+window.planDaysLeft = planDaysLeft;
+window.PlanBadge = PlanBadge;
+
+Object.assign(window, { Icon, Avatar, CatBadge, StatusBadge, Progress, BarChart, Donut, Drawer, useToast, SectionHead, bumpData, useDataVersion, LineNotify, TierBadge, planMeta, planDaysLeft, PlanBadge });

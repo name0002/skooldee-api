@@ -1135,17 +1135,34 @@ function App({ liveLogout }){
             const sch = DATA._schoolRaw || {};
             const planType = sch.plan || 'trial';
             const planExpires = sch.plan_expires;
-            const isPaid = ['starter','pro','premium'].includes(planType);
-            if(!DATA._isLiveMode || isPaid) return null;
-            const daysLeft = planExpires ? Math.max(0, Math.ceil((new Date(planExpires)-Date.now())/86400_000)) : null;
-            const expired = planType==='cancelled' || (daysLeft!==null && daysLeft<=0);
+            if(!DATA._isLiveMode) return null;
+            const isPaid = ['studio','academy','enterprise'].includes(planType);
+            const daysRaw = planExpires ? Math.ceil((new Date(planExpires)-Date.now())/86400_000) : null;
+            const daysLeft = daysRaw===null ? null : Math.max(0, daysRaw);
+            const expired = planType==='cancelled' || (daysRaw!==null && daysRaw<=0);
+            const openPlan = ()=>{ try{ localStorage.setItem('bm-settings-section','plan'); }catch{} go('settings'); };
+            // PAID + still valid → compact "current plan" chip (click → Settings ▸ แพ็กเกจของฉัน)
+            if(isPaid && !expired){
+              return (
+                <button onClick={openPlan} title="ดูรายละเอียดแพ็กเกจ"
+                  style={{ width:'100%', marginBottom:10, padding:'11px 13px', borderRadius:'var(--radius)',
+                    background:'var(--surface)', border:'1px solid var(--border)', cursor:'pointer', textAlign:'left',
+                    display:'flex', alignItems:'center', gap:10 }}>
+                  <PlanBadge plan={planType}/>
+                  <span style={{ fontSize:11.5, color:'var(--text-2)' }}>
+                    {daysLeft!==null ? `ต่ออายุใน ${daysLeft} วัน` : 'แพ็กเกจปัจจุบัน'}
+                  </span>
+                </button>
+              );
+            }
+            // TRIAL / EXPIRED / CANCELLED → countdown + upgrade CTA
             return (
               <div style={{ marginBottom:10, padding:'12px 14px', borderRadius:'var(--radius)',
                 background: expired?'var(--danger-soft)':'var(--primary-soft)',
                 border:'1px solid '+(expired?'color-mix(in oklch,var(--danger) 25%,white)':'color-mix(in oklch,var(--primary) 20%,white)') }}>
                 <div style={{ fontSize:12.5, fontWeight:700, marginBottom:5,
                   color: expired?'color-mix(in oklch,var(--danger) 80%,black)':'var(--primary-ink)' }}>
-                  {expired ? '❌ ทดลองใช้หมดอายุ' : daysLeft!==null ? `⏱ ทดลองใช้: เหลือ ${daysLeft} วัน` : '⏱ ทดลองใช้ฟรี'}
+                  {expired ? '❌ แพ็กเกจหมดอายุ' : daysLeft!==null ? `⏱ ทดลองใช้: เหลือ ${daysLeft} วัน` : '⏱ ทดลองใช้ฟรี'}
                 </div>
                 {!expired && daysLeft!==null && daysLeft<=3 &&
                   <div style={{ fontSize:11.5, color:'var(--text-2)', marginBottom:8 }}>อัปเกรดเพื่อใช้งานต่อไม่ขาดตอน</div>}
