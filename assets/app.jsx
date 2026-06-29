@@ -1052,7 +1052,6 @@ function App({ liveLogout }){
   const [page, setPage] = useState(()=> localStorage.getItem("bm-page") || "dashboard");
   const [changingPw, setChangingPw] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [upgrading, setUpgrading] = useState(false);
   const [checkoutOk, setCheckoutOk] = useState(false);
 
   React.useEffect(()=>{
@@ -1063,14 +1062,6 @@ function App({ liveLogout }){
       setTimeout(()=>setCheckoutOk(false), 10000);
     }
   }, []);
-
-  const doUpgrade = async (plan, cycle)=>{
-    setUpgrading(true);
-    try{
-      const r = await window.API.stripeCheckout(plan||'pro', cycle||'mo');
-      window.location.href = r.url;
-    } catch(e){ alert(e.message||'เกิดข้อผิดพลาด กรุณาลองใหม่'); setUpgrading(false); }
-  };
 
   React.useEffect(()=>{
     const r = document.documentElement.style;
@@ -1166,9 +1157,9 @@ function App({ liveLogout }){
                 </div>
                 {!expired && daysLeft!==null && daysLeft<=3 &&
                   <div style={{ fontSize:11.5, color:'var(--text-2)', marginBottom:8 }}>อัปเกรดเพื่อใช้งานต่อไม่ขาดตอน</div>}
-                <button disabled={upgrading} onClick={()=>doUpgrade('academy','mo')}
+                <button onClick={openPlan}
                   className="btn btn-primary" style={{ width:'100%', fontSize:12.5, padding:'7px 10px' }}>
-                  {upgrading ? 'กำลังโหลด…' : 'อัปเกรด ฿1,990/เดือน'}
+                  เลือกแพ็กเกจ
                 </button>
               </div>
             );
