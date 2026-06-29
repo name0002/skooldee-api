@@ -1707,12 +1707,22 @@ function LineSettingsSection({ showToast }){
               นำไปวางใน LINE Developers Console → Messaging API → <b>Webhook URL</b> แล้วเปิด <b>Use webhook</b>
             </div>
 
-            {/* channel secret (optional, for signature verification) */}
+            {/* channel secret — REQUIRED: the webhook verifies every event's signature with it,
+                so without it LINE events are all rejected (rich-menu buttons, auto-linking and
+                class confirmations silently stop working). */}
             <label style={{ display:'block', fontWeight:600, fontSize:13, margin:'16px 0 6px' }}>
-              Channel Secret <span style={{ fontWeight:400, color:'var(--text-3)', fontSize:12 }}>({secretCfg?'ตั้งค่าแล้ว — ใส่ใหม่เพื่อเปลี่ยน':'ไม่บังคับ แต่แนะนำ เพื่อความปลอดภัย'})</span>
+              Channel Secret <span style={{ fontWeight:400, color: secretCfg?'var(--text-3)':'var(--danger)', fontSize:12 }}>({secretCfg?'ตั้งค่าแล้ว — ใส่ใหม่เพื่อเปลี่ยน':'จำเป็น — ปุ่มเมนูและการเชื่อมอัตโนมัติจะไม่ทำงานถ้าไม่ใส่'})</span>
             </label>
+            {!secretCfg && (
+              <div style={{ background:'#DC262611', border:'1px solid var(--danger)', borderRadius:8,
+                padding:'10px 12px', marginBottom:10, fontSize:12.5, lineHeight:1.6, color:'var(--text-2)' }}>
+                ⚠️ ยังไม่ได้ใส่ Channel Secret — ตอนนี้เมื่อผู้ปกครองกดปุ่มในเมนู (เช่น "ข้อมูลของฉัน", "คอร์สคงเหลือ")
+                หรือกดยืนยัน/แจ้งลา <b>ระบบจะไม่ตอบกลับ</b> เพราะตรวจสอบความปลอดภัยไม่ผ่าน<br/>
+                วิธีแก้: LINE Developers Console → channel → แท็บ <b>Basic settings</b> → คัดลอก <b>Channel secret</b> มาวางด้านล่าง
+              </div>
+            )}
             <div style={{ display:'flex', gap:8 }}>
-              <input style={{ ...inp, flex:1 }} type="password" value={secret} onChange={e=>setSecret(e.target.value)}
+              <input style={{ ...inp, flex:1, ...(secretCfg?{}:{ borderColor:'var(--danger)' }) }} type="password" value={secret} onChange={e=>setSecret(e.target.value)}
                 placeholder={secretCfg?'••••••••••••':'วาง Channel Secret'}/>
               <button className="btn" style={{ fontSize:13, whiteSpace:'nowrap' }} disabled={busy} onClick={saveSecret}>บันทึก</button>
             </div>
