@@ -77,48 +77,26 @@ r.post('/webhook/:schoolId', async (req, res) => {
         }
       } else if (action === 'packages') {
         // Rich Menu "course balance" button → reply with remaining sessions per child.
-        const students = all(
-          'SELECT name, nickname, sessions_remaining, packages_json FROM students WHERE line_user_id = ? AND school_id = ? AND status != ? ORDER BY id',
-          userId, sid, 'inactive'
-        );
-        if (students.length) {
-          const lines = students.map((s) => {
-            const nm = `น้อง${s.nickname || s.name}`;
-            let pkgs = [];
-            try { if (s.packages_json) { const a = JSON.parse(s.packages_json); if (Array.isArray(a)) pkgs = a; } } catch { /* ignore */ }
-            const perSubject = pkgs.filter((p) => p && (p.sessions_total || 0) > 0);
-            if (perSubject.length) {
-              return `${nm}\n` + perSubject.map((p) => `  • ${p.name || p.category || 'คอร์ส'}: เหลือ ${p.sessions_remaining || 0} ครั้ง`).join('\n');
-            }
-            return `${nm}: เหลือ ${s.sessions_remaining || 0} ครั้ง`;
-          });
-          await reply(school.line_token, ev.replyToken, `📦 คอร์สคงเหลือ\n\n${lines.join('\n\n')}`);
-        } else {
-          await reply(school.line_token, ev.replyToken,
-            'ยังไม่พบข้อมูลในระบบค่ะ 🙏\nรบกวนติดต่อทางโรงเรียนเพื่อขอรหัสเชื่อมต่อก่อนนะคะ');
-        }
+        await replyPackages(school.line_token, ev.replyToken, sid, userId);
       } else if (action === 'parent_portal') {
-        const students = all(
-          'SELECT name, nickname, parent_token FROM students WHERE line_user_id = ? AND school_id = ? AND status != ? ORDER BY id',
-          userId, sid, 'inactive'
-        );
-        if (students.length) {
-          // one link opens the combined family page (shows every linked child with a switcher)
-          const link = `https://skooldee.com/parent?token=${students[0].parent_token}`;
-          const names = students.map((s) => `น้อง${s.nickname || s.name}`).join(', ');
-          const who = students.length > 1
-            ? `ดูข้อมูลบุตรหลานทุกคน (${names}) ได้ที่ลิงก์เดียวค่ะ`
-            : `ดูข้อมูล${names}ได้ที่นี่ค่ะ`;
-          await reply(school.line_token, ev.replyToken,
-            `🔗 ${who}\n\n${link}\n\n(กดลิงค์เพื่อเปิดในเบราว์เซอร์)`);
-        } else {
-          await reply(school.line_token, ev.replyToken,
-            'ยังไม่พบข้อมูลในระบบค่ะ 🙏\nรบกวนติดต่อทางโรงเรียนเพื่อขอรหัสเชื่อมต่อก่อนนะคะ');
-        }
+        await replyParentPortal(school.line_token, ev.replyToken, sid, userId);
       }
     } else if (ev.type === 'message' && ev.message && ev.message.type === 'text') {
       const raw = String(ev.message.text || '').trim();
       const code = raw.toUpperCase();
+
+      // Rich Menu buttons are configured to SEND THEIR LABEL AS TEXT (not as a postback),
+      // so a tap arrives here as a plain Thai message. Route those known menu phrases to the
+      // same handlers as the postback actions — otherwise they fail the looksLikeCode check
+      // below and the OA stays silent (parents tap "ข้อมูลของฉัน" / "คอร์สคงเหลือ" → no reply).
+      if (raw === 'คอร์สคงเหลือ') {
+        await replyPackages(school.line_token, ev.replyToken, sid, userId);
+        continue;
+      }
+      if (raw === 'ข้อมูลของฉัน') {
+        await replyParentPortal(school.line_token, ev.replyToken, sid, userId);
+        continue;
+      }
       // CRITICAL: only treat a message as a "link code" attempt when it actually looks
       // like one. Parents chatting normally with the school (Thai sentences, messages
       // with spaces) must NOT get an auto-reply — otherwise the OA spams them with
@@ -166,6 +144,53 @@ r.post('/webhook/:schoolId', async (req, res) => {
   }
   res.sendStatus(200);
 });
+
+// Reply with each linked child's remaining sessions. Shared by the "packages" postback
+// and the "คอร์สคงเหลือ" Rich Menu text button.
+async function replyPackages(token, replyToken, sid, userId) {
+  const students = all(
+    'SELECT name, nickname, sessions_remaining, packages_json FROM students WHERE line_user_id = ? AND school_id = ? AND status != ? ORDER BY id',
+    userId, sid, 'inactive'
+  );
+  if (students.length) {
+    const lines = students.map((s) => {
+      const nm = `น้อง${s.nickname || s.name}`;
+      let pkgs = [];
+      try { if (s.packages_json) { const a = JSON.parse(s.packages_json); if (Array.isArray(a)) pkgs = a; } } catch { /* ignore */ }
+      const perSubject = pkgs.filter((p) => p && (p.sessions_total || 0) > 0);
+      if (perSubject.length) {
+        return `${nm}\n` + perSubject.map((p) => `  • ${p.name || p.category || 'คอร์ส'}: เหลือ ${p.sessions_remaining || 0} ครั้ง`).join('\n');
+      }
+      return `${nm}: เหลือ ${s.sessions_remaining || 0} ครั้ง`;
+    });
+    await reply(token, replyToken, `📦 คอร์สคงเหลือ\n\n${lines.join('\n\n')}`);
+  } else {
+    await reply(token, replyToken,
+      'ยังไม่พบข้อมูลในระบบค่ะ 🙏\nรบกวนติดต่อทางโรงเรียนเพื่อขอรหัสเชื่อมต่อก่อนนะคะ');
+  }
+}
+
+// Reply with the parent-portal link for the family. Shared by the "parent_portal" postback
+// and the "ข้อมูลของฉัน" Rich Menu text button.
+async function replyParentPortal(token, replyToken, sid, userId) {
+  const students = all(
+    'SELECT name, nickname, parent_token FROM students WHERE line_user_id = ? AND school_id = ? AND status != ? ORDER BY id',
+    userId, sid, 'inactive'
+  );
+  if (students.length) {
+    // one link opens the combined family page (shows every linked child with a switcher)
+    const link = `https://skooldee.com/parent?token=${students[0].parent_token}`;
+    const names = students.map((s) => `น้อง${s.nickname || s.name}`).join(', ');
+    const who = students.length > 1
+      ? `ดูข้อมูลบุตรหลานทุกคน (${names}) ได้ที่ลิงก์เดียวค่ะ`
+      : `ดูข้อมูล${names}ได้ที่นี่ค่ะ`;
+    await reply(token, replyToken,
+      `🔗 ${who}\n\n${link}\n\n(กดลิงค์เพื่อเปิดในเบราว์เซอร์)`);
+  } else {
+    await reply(token, replyToken,
+      'ยังไม่พบข้อมูลในระบบค่ะ 🙏\nรบกวนติดต่อทางโรงเรียนเพื่อขอรหัสเชื่อมต่อก่อนนะคะ');
+  }
+}
 
 async function reply(token, replyToken, text) {
   if (!token || !replyToken) return;
