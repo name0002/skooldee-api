@@ -3,18 +3,20 @@ import crypto from 'node:crypto';
 import { all, get, run, tierOf } from '../db.js';
 import { wrap, required, bad, nearLimitInfo } from '../util.js';
 import { requirePage, ownStudentIds } from '../auth.js';
-import { effectivePlan } from '../plans.js';
+import { effectivePlan, planAllows } from '../plans.js';
 
 const r = Router();
 
 // Enforce the plan's student cap. Throws if adding `adding` students would exceed it.
+// The cap counts ACTIVE students only (status='active') — paused/inactive (graduated,
+// on a school break, etc.) don't consume a seat, so a school's history can't lock them out.
 function assertStudentCap(sid, adding = 1) {
   const sch = get('SELECT plan, plan_expires FROM schools WHERE id = ?', sid);
   const cap = effectivePlan(sch).students;
   if (cap === Infinity) return;
-  const cur = get('SELECT COUNT(*) AS n FROM students WHERE school_id = ?', sid).n;
+  const cur = get("SELECT COUNT(*) AS n FROM students WHERE school_id = ? AND status = 'active'", sid).n;
   if (cur + adding > cap) {
-    throw bad(`แผนปัจจุบันรองรับนักเรียนสูงสุด ${cap} คน — อัปเกรดเพื่อเพิ่มได้ไม่จำกัด`, 402);
+    throw bad(`แผนปัจจุบันรองรับนักเรียนที่กำลังเรียนสูงสุด ${cap} คน — อัปเกรดแพ็กเกจ หรือเปลี่ยนสถานะนักเรียนที่ไม่ได้เรียนแล้วเป็น "พัก/หยุด" เพื่อเพิ่มที่ว่าง`, 402);
   }
 }
 
@@ -57,7 +59,9 @@ function insertStudent(sid, b) {
   // when multiple packages given, the per-student totals are the aggregate sum
   const sessTotal = enr ? enr.total : (b.sessions_total || b.sessions_remaining || 0);
   const sessRemain = enr ? enr.remaining : (b.sessions_remaining || 0);
-  const packageId = (enr && enr.firstPkg) || b.package_id || null;
+  let packageId = (enr && enr.firstPkg) || b.package_id || null;
+  // package_id must belong to this school — else it's a cross-tenant reference (leaks another school's package via the join in GET /)
+  if (packageId && !get('SELECT id FROM packages WHERE id = ? AND school_id = ?', packageId, sid)) packageId = null;
   const result = run(
     `INSERT INTO students (school_id, name, nickname, age, birthday, parent_name, parent_phone, line_id, category, categories_json,
        teacher_id, package_id, sessions_remaining, sessions_total, balance_due, status, referral_code, parent_token, goal, email, packages_json, recipient_type, honorific)
@@ -145,6 +149,11 @@ r.patch('/:id', canManage, wrap((req, res) => {
   if (!s) throw bad('student not found', 404);
   const fields = ['name', 'nickname', 'age', 'birthday', 'parent_name', 'parent_phone', 'line_id', 'category',
     'teacher_id', 'package_id', 'sessions_remaining', 'sessions_total', 'balance_due', 'status', 'goal', 'email', 'recipient_type', 'honorific'];
+  // reactivating a paused/inactive student into 'active' consumes a plan seat — enforce the same cap as POST /
+  if ('status' in req.body && req.body.status === 'active' && s.status !== 'active') assertStudentCap(req.schoolId, 1);
+  if ('package_id' in req.body && req.body.package_id && !get('SELECT id FROM packages WHERE id = ? AND school_id = ?', req.body.package_id, req.schoolId)) {
+    throw bad('package not found', 404);
+  }
   const sets = [], vals = [];
   for (const f of fields) if (f in req.body) { sets.push(`${f} = ?`); vals.push(req.body[f]); }
   // multi-subject: categories[] → categories_json (+ sync primary category if not set explicitly)
@@ -154,7 +163,13 @@ r.patch('/:id', canManage, wrap((req, res) => {
     if (!('category' in req.body)) { sets.push('category = ?'); vals.push(arr[0] || null); }
   }
   // recurring auto-billing profile (validated — discount type/value sanitised, package must belong to school)
-  if ('billing_enabled' in req.body) { sets.push('billing_enabled = ?'); vals.push(req.body.billing_enabled ? 1 : 0); }
+  if ('billing_enabled' in req.body) {
+    // turning auto-billing ON is an ACADEMY+ feature; turning it off is always allowed
+    if (req.body.billing_enabled && !planAllows(get('SELECT plan, plan_expires FROM schools WHERE id = ?', req.schoolId), 'autobill')) {
+      throw bad('วางบิลอัตโนมัติใช้ได้ในแผน ACADEMY ขึ้นไป — อัปเกรดเพื่อเปิดใช้งาน', 402);
+    }
+    sets.push('billing_enabled = ?'); vals.push(req.body.billing_enabled ? 1 : 0);
+  }
   if ('billing_package_id' in req.body) {
     const pid = req.body.billing_package_id || null;
     if (pid && !get('SELECT id FROM packages WHERE id = ? AND school_id = ?', pid, req.schoolId)) throw bad('billing package not found', 404);
@@ -178,6 +193,9 @@ r.patch('/:id', canManage, wrap((req, res) => {
       if (!('package_id' in req.body) && enr.firstPkg) { sets.push('package_id = ?'); vals.push(enr.firstPkg); }
     } else {
       sets.push('packages_json = ?'); vals.push(null);
+      // packages cleared — don't leave stale totals from the removed packages behind
+      if (!('sessions_total' in req.body)) { sets.push('sessions_total = ?'); vals.push(0); }
+      if (!('sessions_remaining' in req.body)) { sets.push('sessions_remaining = ?'); vals.push(0); }
     }
   }
   if (!sets.length) throw bad('no fields to update');
