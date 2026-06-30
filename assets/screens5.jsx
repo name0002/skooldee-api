@@ -4,9 +4,16 @@
 function Settings({ go }){
   useDataVersion();
   const [toast, showToast] = useToast();
-  // jump straight to a tab when navigated here with a hint (e.g. upgrade button → 'account')
-  const [section, setSection] = useState(()=>{ const j=DATA._settingsJump; DATA._settingsJump=null; return j||'school'; });
-  // also honour the hint when already mounted on Settings (bumpData re-renders us)
+  // jump straight to a tab when navigated here with a hint:
+  //  - DATA._settingsJump  → upgrade button / locked-feature prompt (set to 'plan')
+  //  - localStorage 'bm-settings-section' → sidebar plan chip (deep-links to 'plan')
+  const [section, setSection] = useState(()=>{
+    const j = DATA._settingsJump; DATA._settingsJump = null;
+    if(j) return j;
+    try { const s = localStorage.getItem('bm-settings-section'); if(s){ localStorage.removeItem('bm-settings-section'); return s; } } catch {}
+    return 'school';
+  });
+  // also honour the _settingsJump hint when already mounted on Settings (bumpData re-renders us)
   React.useEffect(()=>{ if(DATA._settingsJump){ setSection(DATA._settingsJump); DATA._settingsJump=null; window.scrollTo(0,0); } });
 
   const tab = (id, label)=>(
@@ -27,6 +34,7 @@ function Settings({ go }){
     <div style={{ maxWidth:700, margin:'0 auto', padding:'4px 0 40px' }}>
       {/* tabs */}
       <div style={{ display:'flex', gap:8, marginBottom:28, flexWrap:'wrap' }}>
+        {tab('plan',       '💎 แพ็กเกจของฉัน')}
         {tab('school',     '🏫 ข้อมูลโรงเรียน')}
         {tab('goals',      '🎯 เป้าหมายธุรกิจ')}
         {tab('categories', '🎨 ประเภทวิชา')}
@@ -41,6 +49,7 @@ function Settings({ go }){
         {tab('account',    '🔐 บัญชีและความปลอดภัย')}
       </div>
 
+      {section==='plan'        && <SubscriptionSettingsSection/>}
       {section==='school'      && <SchoolSettingsSection showToast={showToast}/>}
       {section==='goals'       && <GoalsSettingsSection showToast={showToast}/>}
       {section==='categories'  && <CategoriesSettingsSection showToast={showToast}/>}
@@ -67,6 +76,169 @@ function SettingsCard({ title, sub, children }){
       {sub && <div style={{ color:'var(--text-2)', fontSize:13, marginBottom:18 }}>{sub}</div>}
       {children}
     </div>
+  );
+}
+
+/* ---- แพ็กเกจของฉัน (subscription plan: current status + picker + Stripe Portal) ---- */
+// Self-serve plans (ENTERPRISE is sales-led — no Stripe checkout, contact form instead).
+// Prices mirror the landing page (index.html #pricing); yearly = the per-month-equivalent
+// shown with the annual total. Plan keys + caps match server/src/plans.js.
+const BUYABLE_PLANS = [
+  { key:'studio',  label:'STUDIO',  sub:'สตูดิโอเปิดใหม่ ครูฉายเดี่ยว หรือโรงเรียนเล็ก',
+    mo:890,  yr:712,  yrTotal:8544,
+    feats:['นักเรียนสูงสุด 50 คน','ตารางเรียน & เช็คชื่อ','การเงิน & ออกใบเสร็จ','คำนวณค่าสอนครูพื้นฐาน'] },
+  { key:'academy', label:'ACADEMY', sub:'โรงเรียนขนาดกลางที่กำลังเติบโต', pop:true,
+    mo:1990, yr:1592, yrTotal:19104,
+    feats:['นักเรียนไม่จำกัด','ทุกอย่างใน STUDIO','แจ้งเตือนผ่าน LINE OA แบรนด์คุณ','การบ้าน & แต้มสะสม','แนะนำเพื่อน & รายงาน'] },
+];
+const PLAN_RANK = { trial:0, studio:1, academy:2, enterprise:3, cancelled:0 };
+
+function PlanPicker({ currentPlan }){
+  const [cycle, setCycle] = useState('mo');           // 'mo' | 'yr'
+  const [busy, setBusy]   = useState(null);           // plan key being checked out
+  const live = !!DATA._isLiveMode;
+  const baht = (n)=> '฿' + Number(n).toLocaleString('en-US');
+
+  const buy = async (planKey)=>{
+    if(!live || !window.API){ alert('เลือกซื้อแพ็กเกจได้เมื่อเข้าสู่ระบบจริงเท่านั้น'); return; }
+    setBusy(planKey);
+    try { const r = await window.API.stripeCheckout(planKey, cycle); window.location.href = r.url; }
+    catch(e){ alert((e && e.message) || 'เกิดข้อผิดพลาด กรุณาลองใหม่'); setBusy(null); }
+  };
+
+  const cycleBtn = (id, label, note)=>(
+    <button onClick={()=>setCycle(id)}
+      style={{ padding:'7px 16px', borderRadius:8, border:'none', cursor:'pointer', fontSize:13, fontWeight:600,
+        background: cycle===id ? 'var(--primary)' : 'transparent', color: cycle===id ? '#fff' : 'var(--text-2)' }}>
+      {label}{note && <span style={{ fontSize:11, marginLeft:6, opacity:cycle===id?.9:.7 }}>{note}</span>}
+    </button>
+  );
+
+  return (
+    <SettingsCard title="เลือก / เปลี่ยนแพ็กเกจ" sub="เลือกแพ็กเกจที่เหมาะกับโรงเรียนของคุณ เปลี่ยนหรือยกเลิกได้ทุกเมื่อ">
+      {/* billing-cycle toggle */}
+      <div style={{ display:'inline-flex', gap:4, padding:4, borderRadius:10, background:'var(--surface-2,var(--bg,#f1f3f5))',
+        border:'1px solid var(--border)', marginBottom:20 }}>
+        {cycleBtn('mo','รายเดือน')}
+        {cycleBtn('yr','รายปี','ประหยัด 20%')}
+      </div>
+
+      <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
+        {BUYABLE_PLANS.map((p)=>{
+          const isCurrent = p.key===currentPlan;
+          const price = cycle==='yr' ? p.yr : p.mo;
+          return (
+            <div key={p.key} style={{ flex:'1 1 260px', minWidth:240, border:'1.5px solid '+(p.pop?'var(--primary)':'var(--border)'),
+              borderRadius:'var(--radius-lg)', padding:'20px 20px 22px', position:'relative', background:'var(--surface)' }}>
+              {p.pop && <span style={{ position:'absolute', top:-11, left:18, background:'var(--primary)', color:'#fff',
+                fontSize:11, fontWeight:800, padding:'3px 10px', borderRadius:20 }}>🔥 แนะนำ</span>}
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:3 }}>
+                <PlanBadge plan={p.key}/>
+                {isCurrent && <span style={{ fontSize:11, fontWeight:700, color:'var(--text-3)' }}>ปัจจุบัน</span>}
+              </div>
+              <div style={{ fontSize:12, color:'var(--text-3)', marginBottom:12, minHeight:32 }}>{p.sub}</div>
+              <div style={{ display:'flex', alignItems:'baseline', gap:3 }}>
+                <span style={{ fontSize:16, fontWeight:700 }}>฿</span>
+                <span style={{ fontSize:34, fontWeight:800, letterSpacing:'-.02em', lineHeight:1 }}>{Number(price).toLocaleString('en-US')}</span>
+                <span style={{ fontSize:13, color:'var(--text-3)' }}>/เดือน</span>
+              </div>
+              <div style={{ fontSize:11.5, color:'var(--text-3)', minHeight:18, marginTop:5 }}>
+                {cycle==='yr' ? `เรียกเก็บ ${baht(p.yrTotal)}/ปี` : ''}
+              </div>
+              <ul style={{ listStyle:'none', padding:0, margin:'16px 0 18px', display:'flex', flexDirection:'column', gap:9 }}>
+                {p.feats.map((f,i)=>(
+                  <li key={i} style={{ display:'flex', gap:8, fontSize:13, color:'var(--text-2)', alignItems:'flex-start' }}>
+                    <span style={{ color:'var(--primary)', fontWeight:800, flex:'0 0 auto' }}>✓</span>{f}
+                  </li>
+                ))}
+              </ul>
+              <button disabled={isCurrent || busy===p.key} onClick={()=>buy(p.key)}
+                className={p.pop && !isCurrent ? 'btn btn-primary' : 'btn'}
+                style={{ width:'100%', fontSize:13.5, padding:'9px 10px',
+                  ...(isCurrent ? { background:'var(--surface-2,#eee)', color:'var(--text-3)', cursor:'default', border:'1px solid var(--border)' } : {}),
+                  ...(!p.pop && !isCurrent ? { border:'1.5px solid var(--primary)', color:'var(--primary)', background:'transparent' } : {}) }}>
+                {isCurrent ? 'แพ็กเกจปัจจุบัน' : busy===p.key ? 'กำลังโหลด…' : 'เลือกแพ็กเกจนี้'}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ENTERPRISE — sales-led */}
+      <div style={{ marginTop:16, padding:'14px 18px', borderRadius:'var(--radius)', border:'1px dashed var(--border)',
+        display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+        <PlanBadge plan="enterprise"/>
+        <span style={{ fontSize:12.5, color:'var(--text-2)', flex:1, minWidth:160 }}>
+          โรงเรียนขนาดใหญ่ หรือมีมากกว่า 1 สาขา — ทีมงานเข้าเซ็ตระบบให้ถึงที่
+        </span>
+        <a href="contact.html?type=sales&plan=enterprise" target="_blank" rel="noopener"
+          className="btn" style={{ fontSize:13, padding:'8px 16px', border:'1px solid var(--border)' }}>ติดต่อฝ่ายขาย</a>
+      </div>
+    </SettingsCard>
+  );
+}
+
+function SubscriptionSettingsSection(){
+  useDataVersion();
+  const [portalBusy, setPortalBusy] = useState(false);
+  const sch  = DATA._schoolRaw || {};
+  const plan = sch.plan || 'trial';
+  const days = planDaysLeft(sch.plan_expires);
+  const expired = plan==='cancelled' || (days!==null && days<=0);
+  const isPaid = ['studio','academy','enterprise'].includes(plan);
+  const fmtDate = (iso)=>{
+    if(!iso) return '—';
+    try { return new Date(iso).toLocaleDateString('th-TH', { year:'numeric', month:'long', day:'numeric' }); }
+    catch { return '—'; }
+  };
+  // status line: trial = countdown, paid+valid = active, otherwise expired
+  const status = expired
+    ? { c:'var(--danger)', t:'หมดอายุแล้ว' }
+    : plan==='trial'
+      ? { c:'#1D4ED8', t:'กำลังทดลองใช้งาน' }
+      : { c:'#065F46', t:'ใช้งานอยู่' };
+  const expiryLabel = plan==='trial' ? 'ทดลองใช้ถึง' : 'ต่ออายุ/หมดอายุ';
+
+  const openPortal = async ()=>{
+    if(!DATA._isLiveMode || !window.API){ alert('จัดการการเรียกเก็บเงินได้เมื่อเข้าสู่ระบบจริงเท่านั้น'); return; }
+    setPortalBusy(true);
+    try { const r = await window.API.stripePortal(); window.location.href = r.url; }
+    catch(e){ alert((e && e.message) || 'ยังไม่มีข้อมูลการสมัครสมาชิก'); setPortalBusy(false); }
+  };
+
+  const row = (k, v)=>(
+    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:14,
+      padding:'12px 0', borderTop:'1px solid var(--border)' }}>
+      <span style={{ fontSize:13, color:'var(--text-2)' }}>{k}</span>
+      <span style={{ fontSize:13.5, fontWeight:600, textAlign:'right' }}>{v}</span>
+    </div>
+  );
+
+  return (
+    <>
+      <SettingsCard title="แพ็กเกจปัจจุบัน" sub="แพ็กเกจการใช้งานและสถานะการสมัครของโรงเรียนคุณ">
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:6 }}>
+          <PlanBadge plan={plan}/>
+          <span style={{ fontSize:13, fontWeight:600, color:status.c }}>● {status.t}</span>
+        </div>
+        {row(expiryLabel, fmtDate(sch.plan_expires))}
+        {days!==null && row('เหลือเวลา', expired ? <span style={{ color:'var(--danger)' }}>หมดแล้ว</span> : `${days} วัน`)}
+        {expired && (
+          <div style={{ marginTop:16, padding:'12px 14px', borderRadius:'var(--radius)',
+            background:'var(--danger-soft)', fontSize:12.5, color:'color-mix(in oklch,var(--danger) 80%,black)' }}>
+            แพ็กเกจหมดอายุแล้ว — บางฟีเจอร์อาจถูกจำกัด กรุณาต่ออายุเพื่อใช้งานต่อเนื่อง
+          </div>
+        )}
+        {isPaid && (
+          <button disabled={portalBusy} onClick={openPortal}
+            className="btn" style={{ marginTop:16, fontSize:13, padding:'8px 16px', border:'1px solid var(--border)' }}>
+            {portalBusy ? 'กำลังโหลด…' : '💳 จัดการการเรียกเก็บเงิน / ยกเลิก'}
+          </button>
+        )}
+      </SettingsCard>
+
+      <PlanPicker currentPlan={plan}/>
+    </>
   );
 }
 

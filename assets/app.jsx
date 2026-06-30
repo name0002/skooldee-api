@@ -983,7 +983,7 @@ function pageLocked(pageId){
   return f ? !planHas(f) : false;
 }
 // Upgrade-prompt panel shown in place of a feature the current plan doesn't include.
-function LockedFeature({ feat, onUpgrade, upgrading, go }){
+function LockedFeature({ feat, onUpgrade, go }){
   const META = {
     homework: { icon:'📚', title:'การบ้าน', desc:'มอบหมายการบ้านและส่งแจ้งเตือนถึงผู้ปกครองผ่าน LINE อัตโนมัติ พร้อมติดตามสถานะการส่งงาน' },
     points:   { icon:'🎁', title:'แต้มสะสม & แนะนำเพื่อน', desc:'สะสมแต้มจากการเข้าเรียน ระดับสมาชิก และระบบแนะนำเพื่อนรับแต้มทั้งผู้แนะนำและเพื่อนใหม่' },
@@ -1000,8 +1000,8 @@ function LockedFeature({ feat, onUpgrade, upgrading, go }){
         color:'var(--accent-ink,#B45309)', background:'var(--accent-soft,#FEF3C7)', padding:'4px 12px', borderRadius:20, marginBottom:12 }}>ACADEMY ขึ้นไป</span>
       <div style={{ fontWeight:800, fontSize:21, marginBottom:8 }}>{m.title}</div>
       <div style={{ fontSize:14.5, color:'var(--text-2)', marginBottom:22, lineHeight:1.6 }}>{m.desc}</div>
-      <button className="btn btn-primary" disabled={upgrading} onClick={onUpgrade} style={{ minWidth:240 }}>
-        {upgrading ? 'กำลังโหลด…' : 'อัปเกรดเป็น ACADEMY ฿1,990/เดือน'}
+      <button className="btn btn-primary" onClick={onUpgrade} style={{ minWidth:240 }}>
+        เลือกแพ็กเกจ ACADEMY
       </button>
       <div style={{ marginTop:14 }}>
         <button className="btn btn-ghost btn-sm" onClick={()=>go('dashboard')}>กลับหน้าภาพรวม</button>
@@ -1114,7 +1114,6 @@ function App({ liveLogout }){
   const [page, setPage] = useState(()=> localStorage.getItem("bm-page") || "dashboard");
   const [changingPw, setChangingPw] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [upgrading, setUpgrading] = useState(false);
   const [checkoutOk, setCheckoutOk] = useState(false);
 
   React.useEffect(()=>{
@@ -1126,11 +1125,11 @@ function App({ liveLogout }){
     }
   }, []);
 
-  // Upgrade entry points (sidebar + locked-feature prompts) now route to the plan
-  // picker in Settings → บัญชีและความปลอดภัย, so the user chooses STUDIO/ACADEMY +
-  // monthly/yearly there instead of being sent straight to ACADEMY checkout.
+  // Upgrade entry points (locked-feature prompts) route to the plan picker in
+  // Settings ▸ แพ็กเกจของฉัน, so the user chooses STUDIO/ACADEMY + monthly/yearly
+  // there instead of being sent straight to ACADEMY checkout.
   const doUpgrade = ()=>{
-    DATA._settingsJump = 'account';
+    DATA._settingsJump = 'plan';
     go('settings');
     bumpData();
   };
@@ -1200,23 +1199,40 @@ function App({ liveLogout }){
             const sch = DATA._schoolRaw || {};
             const planType = sch.plan || 'trial';
             const planExpires = sch.plan_expires;
+            if(!DATA._isLiveMode) return null;
             const isPaid = ['studio','academy','enterprise'].includes(planType);
-            if(!DATA._isLiveMode || isPaid) return null;
-            const daysLeft = planExpires ? Math.max(0, Math.ceil((new Date(planExpires)-Date.now())/86400_000)) : null;
-            const expired = planType==='cancelled' || (daysLeft!==null && daysLeft<=0);
+            const daysRaw = planExpires ? Math.ceil((new Date(planExpires)-Date.now())/86400_000) : null;
+            const daysLeft = daysRaw===null ? null : Math.max(0, daysRaw);
+            const expired = planType==='cancelled' || (daysRaw!==null && daysRaw<=0);
+            const openPlan = ()=>{ try{ localStorage.setItem('bm-settings-section','plan'); }catch{} go('settings'); };
+            // PAID + still valid → compact "current plan" chip (click → Settings ▸ แพ็กเกจของฉัน)
+            if(isPaid && !expired){
+              return (
+                <button onClick={openPlan} title="ดูรายละเอียดแพ็กเกจ"
+                  style={{ width:'100%', marginBottom:10, padding:'11px 13px', borderRadius:'var(--radius)',
+                    background:'var(--surface)', border:'1px solid var(--border)', cursor:'pointer', textAlign:'left',
+                    display:'flex', alignItems:'center', gap:10 }}>
+                  <PlanBadge plan={planType}/>
+                  <span style={{ fontSize:11.5, color:'var(--text-2)' }}>
+                    {daysLeft!==null ? `ต่ออายุใน ${daysLeft} วัน` : 'แพ็กเกจปัจจุบัน'}
+                  </span>
+                </button>
+              );
+            }
+            // TRIAL / EXPIRED / CANCELLED → countdown + upgrade CTA
             return (
               <div style={{ marginBottom:10, padding:'12px 14px', borderRadius:'var(--radius)',
                 background: expired?'var(--danger-soft)':'var(--primary-soft)',
                 border:'1px solid '+(expired?'color-mix(in oklch,var(--danger) 25%,white)':'color-mix(in oklch,var(--primary) 20%,white)') }}>
                 <div style={{ fontSize:12.5, fontWeight:700, marginBottom:5,
                   color: expired?'color-mix(in oklch,var(--danger) 80%,black)':'var(--primary-ink)' }}>
-                  {expired ? '❌ ทดลองใช้หมดอายุ' : daysLeft!==null ? `⏱ ทดลองใช้: เหลือ ${daysLeft} วัน` : '⏱ ทดลองใช้ฟรี'}
+                  {expired ? '❌ แพ็กเกจหมดอายุ' : daysLeft!==null ? `⏱ ทดลองใช้: เหลือ ${daysLeft} วัน` : '⏱ ทดลองใช้ฟรี'}
                 </div>
                 {!expired && daysLeft!==null && daysLeft<=3 &&
                   <div style={{ fontSize:11.5, color:'var(--text-2)', marginBottom:8 }}>อัปเกรดเพื่อใช้งานต่อไม่ขาดตอน</div>}
-                <button disabled={upgrading} onClick={()=>doUpgrade('academy','mo')}
+                <button onClick={openPlan}
                   className="btn btn-primary" style={{ width:'100%', fontSize:12.5, padding:'7px 10px' }}>
-                  {upgrading ? 'กำลังโหลด…' : 'อัปเกรด ฿1,990/เดือน'}
+                  เลือกแพ็กเกจ
                 </button>
               </div>
             );
@@ -1278,7 +1294,7 @@ function App({ liveLogout }){
         <main className="content">
           {allowed
             ? (pageLocked(page)
-                ? <LockedFeature feat={PLAN_PAGE_FEATURE[page]} upgrading={upgrading} go={go} onUpgrade={()=>doUpgrade('academy','mo')}/>
+                ? <LockedFeature feat={PLAN_PAGE_FEATURE[page]} go={go} onUpgrade={doUpgrade}/>
                 : <Screen go={go}/>)
             : <div style={{ textAlign:'center', padding:'72px 24px', color:'var(--text-3)' }}>
                 <div style={{ fontSize:42, marginBottom:12 }}>🔒</div>
