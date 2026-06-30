@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { all, get, run } from '../db.js';
 import { wrap, required, bad } from '../util.js';
+import { requireFeature } from '../auth.js';
 
 const r = Router();
+const requireReferrals = requireFeature('points', 'ระบบแนะนำเพื่อนใช้ได้ในแผน ACADEMY ขึ้นไป — อัปเกรดเพื่อเปิดใช้งาน');
 const REFERRER_REWARD = 200; // matches prototype
 const FRIEND_REWARD = 100;
 
@@ -15,7 +17,7 @@ r.get('/', wrap((req, res) => {
 }));
 
 // POST /api/referrals — record an invite from a student
-r.post('/', wrap((req, res) => {
+r.post('/', requireReferrals, wrap((req, res) => {
   const b = required(req.body, ['referrer_student_id', 'friend_name']);
   if (!get('SELECT id FROM students WHERE id = ? AND school_id = ?', b.referrer_student_id, req.schoolId))
     throw bad('referrer not found', 404);
@@ -26,7 +28,7 @@ r.post('/', wrap((req, res) => {
 }));
 
 // PATCH /api/referrals/:id — advance status. On 'subscribed', award points to referrer.
-r.patch('/:id', wrap((req, res) => {
+r.patch('/:id', requireReferrals, wrap((req, res) => {
   const ref = get('SELECT * FROM referrals WHERE id = ? AND school_id = ?', req.params.id, req.schoolId);
   if (!ref) throw bad('referral not found', 404);
   const status = req.body.status;

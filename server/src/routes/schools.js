@@ -2,6 +2,18 @@ import { Router } from 'express';
 import { get, run } from '../db.js';
 import { wrap, bad } from '../util.js';
 import { requireRole } from '../auth.js';
+import { effectivePlan } from '../plans.js';
+
+// Resolve the plan's feature entitlements for the client (single source of truth = plans.js).
+// Trial = full access; expired trial collapses to cancelled inside effectivePlan().
+function entitlements(school) {
+  const p = effectivePlan(school);
+  return {
+    plan_label: p.label,
+    student_cap: p.students === Infinity ? null : p.students,
+    features: { line: !!p.line, homework: !!p.homework, points: !!p.points, booking: !!p.booking, autobill: !!p.autobill, reports: !!p.reports },
+  };
+}
 
 const r = Router();
 
@@ -19,7 +31,7 @@ const parseGoals = (json) => {
 
 // GET /api/schools — current school profile
 r.get('/', wrap((req, res) => {
-  const school = get('SELECT id, name, slug, category, near_limit_threshold, categories_json, line_token, line_secret, notify_prefs, name_display, hours_start, hours_end, contact_phone, line_oa_url, line_oa_basic_id, liff_id, rooms_json, assessment_criteria_json, show_assessments_to_parents, show_course_no_to_parents, invite_message_template, homework_message_template, line_welcome_enabled, line_welcome_message, payment_qr_image, payso_link, slip_enabled, goals_json, logo_image, plan, plan_expires, created_at FROM schools WHERE id = ?', req.schoolId);
+  const school = get('SELECT id, name, slug, category, near_limit_threshold, categories_json, line_token, line_secret, notify_prefs, name_display, hours_start, hours_end, contact_phone, line_oa_url, line_oa_basic_id, liff_id, rooms_json, assessment_criteria_json, show_assessments_to_parents, show_course_no_to_parents, course_expiry_enabled, invite_message_template, homework_message_template, line_welcome_enabled, line_welcome_message, payment_qr_image, payso_link, slip_enabled, goals_json, logo_image, plan, plan_expires, created_at FROM schools WHERE id = ?', req.schoolId);
   if (!school) throw bad('school not found', 404);
   // never expose raw LINE credentials — only whether they are configured
   const { line_token, line_secret, notify_prefs, rooms_json, show_assessments_to_parents, show_course_no_to_parents, slip_enabled, goals_json, ...safe } = school;
@@ -35,7 +47,7 @@ r.get('/', wrap((req, res) => {
     days_remaining = Math.ceil(diff / (1000 * 60 * 60 * 24));
   }
 
-  res.json({ ...safe, rooms: parseRooms(rooms_json), line_configured: !!line_token, line_secret_configured: !!line_secret, notify_prefs: prefs, show_assessments_to_parents: !!show_assessments_to_parents, show_course_no_to_parents: !!show_course_no_to_parents, slip_enabled: !!slip_enabled, goals: parseGoals(goals_json), days_remaining });
+  res.json({ ...safe, rooms: parseRooms(rooms_json), line_configured: !!line_token, line_secret_configured: !!line_secret, notify_prefs: prefs, show_assessments_to_parents: !!show_assessments_to_parents, show_course_no_to_parents: !!show_course_no_to_parents, course_expiry_enabled: !!school.course_expiry_enabled, slip_enabled: !!slip_enabled, goals: parseGoals(goals_json), days_remaining, ...entitlements(school) });
 }));
 
 // PATCH /api/schools — update school profile (owner/admin only)
@@ -120,6 +132,9 @@ r.patch('/', requireRole('owner', 'admin'), wrap((req, res) => {
   if (req.body.show_course_no_to_parents !== undefined) {
     sets.push('show_course_no_to_parents = ?'); vals.push(req.body.show_course_no_to_parents ? 1 : 0);
   }
+  if (req.body.course_expiry_enabled !== undefined) {
+    sets.push('course_expiry_enabled = ?'); vals.push(req.body.course_expiry_enabled ? 1 : 0);
+  }
   if (req.body.invite_message_template !== undefined) {
     const t = String(req.body.invite_message_template || '').slice(0, 1000).trim();
     sets.push('invite_message_template = ?'); vals.push(t || null);
@@ -161,11 +176,11 @@ r.patch('/', requireRole('owner', 'admin'), wrap((req, res) => {
   }
   if (!sets.length) throw bad('no fields to update');
   run(`UPDATE schools SET ${sets.join(', ')} WHERE id = ?`, ...vals, req.schoolId);
-  const s = get('SELECT id, name, slug, category, near_limit_threshold, categories_json, line_token, line_secret, notify_prefs, name_display, hours_start, hours_end, contact_phone, line_oa_url, liff_id, rooms_json, assessment_criteria_json, show_assessments_to_parents, show_course_no_to_parents, invite_message_template, homework_message_template, line_welcome_enabled, line_welcome_message, payment_qr_image, payso_link, slip_enabled, goals_json, logo_image, plan, plan_expires FROM schools WHERE id = ?', req.schoolId);
+  const s = get('SELECT id, name, slug, category, near_limit_threshold, categories_json, line_token, line_secret, notify_prefs, name_display, hours_start, hours_end, contact_phone, line_oa_url, liff_id, rooms_json, assessment_criteria_json, show_assessments_to_parents, show_course_no_to_parents, course_expiry_enabled, invite_message_template, homework_message_template, line_welcome_enabled, line_welcome_message, payment_qr_image, payso_link, slip_enabled, goals_json, logo_image, plan, plan_expires FROM schools WHERE id = ?', req.schoolId);
   const { line_token: lt, line_secret: ls, notify_prefs: np, rooms_json: rj, show_assessments_to_parents: sap, show_course_no_to_parents: scp, slip_enabled: se, goals_json: gj, ...safe } = s;
   let prefs = {};
   try { prefs = np ? JSON.parse(np) : {}; } catch { prefs = {}; }
-  res.json({ ...safe, rooms: parseRooms(rj), line_configured: !!lt, line_secret_configured: !!ls, notify_prefs: prefs, show_assessments_to_parents: !!sap, show_course_no_to_parents: !!scp, slip_enabled: !!se, goals: parseGoals(gj) });
+  res.json({ ...safe, rooms: parseRooms(rj), line_configured: !!lt, line_secret_configured: !!ls, notify_prefs: prefs, show_assessments_to_parents: !!sap, show_course_no_to_parents: !!scp, course_expiry_enabled: !!s.course_expiry_enabled, slip_enabled: !!se, goals: parseGoals(gj), ...entitlements(s) });
 }));
 
 // POST /api/schools/rooms/rename — rename a classroom EVERYWHERE: all slots, category

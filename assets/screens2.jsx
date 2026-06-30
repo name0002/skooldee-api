@@ -287,6 +287,135 @@ function TeacherLeavesPanel({ showToast, onClose, onChange }){
   );
 }
 
+/* ===================== PARENT MAKE-UP REQUESTS PANEL ===================== */
+// Parents propose a make-up day/time/subject from the booking link; admin approves
+// (→ lands on the timetable + notifies parent/teacher) or rejects.
+function MakeupRequestsPanel({ showToast, onClose, onChange }){
+  const [rows, setRows] = useState([]);
+  const [filter, setFilter] = useState('pending');
+  const [busy, setBusy] = useState(null);
+  const [teacherSel, setTeacherSel] = useState({}); // requestId -> chosen teacher _dbId
+
+  const reload = async(status)=>{
+    try{
+      const r = await window.API.makeupRequests(status !== 'all' ? status : undefined);
+      setRows(Array.isArray(r) ? r : []);
+    }catch{}
+  };
+  React.useEffect(()=>{ reload(filter); }, [filter]);
+
+  const THMON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const d1 = (iso)=>{ if(!iso) return '-'; const p=iso.slice(0,10).split('-'); return p.length===3 ? `${+p[2]} ${THMON[+p[1]-1]}` : iso; };
+  const catLabel = (key)=> key ? ((DATA.CATS[key]||{}).label || key) : 'ทั่วไป';
+
+  const approve = async(m)=>{
+    const teacherId = teacherSel[m.id] || null;
+    if(!confirm(`อนุมัติคำขอเรียนชดเชยของ ${m.student_nick||m.student_name} (${d1(m.date)} ${m.start}–${m.end} น.)?\nระบบจะเพิ่มคาบนี้ลงตารางและแจ้งผู้ปกครองให้อัตโนมัติ`)) return;
+    setBusy(m.id);
+    try{
+      await window.API.approveMakeup(m.id, teacherId ? { teacher_id: teacherId } : {});
+      if(DATA.reloadExceptions) await DATA.reloadExceptions().catch(()=>{});
+      await reload(filter);
+      if(onChange) onChange();
+      showToast('อนุมัติแล้ว เพิ่มคาบชดเชยลงตารางและแจ้งผู้ปกครองแล้ว ✓');
+    }catch(e){ showToast(e.message||'เกิดข้อผิดพลาด ❌'); }
+    setBusy(null);
+  };
+  const reject = async(m)=>{
+    const note = prompt(`ปฏิเสธคำขอของ ${m.student_nick||m.student_name}?\n(ใส่เหตุผลถ้าต้องการ — จะส่งให้ผู้ปกครองทาง LINE)`, '');
+    if(note===null) return;
+    setBusy(m.id);
+    try{
+      await window.API.rejectMakeup(m.id, note||null);
+      await reload(filter);
+      if(onChange) onChange();
+      showToast('ปฏิเสธคำขอแล้ว');
+    }catch(e){ showToast(e.message||'เกิดข้อผิดพลาด ❌'); }
+    setBusy(null);
+  };
+  const del = async(m)=>{
+    if(!confirm(`ลบคำขอนี้? ${m.status==='approved'?'(คาบชดเชยในตารางจะถูกลบด้วย)':''}`)) return;
+    setBusy(m.id);
+    try{
+      await window.API.deleteMakeup(m.id);
+      if(m.status==='approved' && DATA.reloadExceptions) await DATA.reloadExceptions().catch(()=>{});
+      setRows(r=>r.filter(x=>x.id!==m.id));
+      if(onChange) onChange();
+      showToast('ลบแล้ว');
+    }catch(e){ showToast(e.message||'เกิดข้อผิดพลาด ❌'); }
+    setBusy(null);
+  };
+
+  const ST = { pending:{label:'รอพิจารณา',color:'#d97706',bg:'#fef3c7'}, approved:{label:'อนุมัติแล้ว',color:'#16a34a',bg:'#dcfce7'}, rejected:{label:'ปฏิเสธ',color:'#dc2626',bg:'#fee2e2'}, cancelled:{label:'ยกเลิก',color:'var(--text-3)',bg:'var(--surface-2)'} };
+  const visible = rows.filter(r=>filter==='all'||r.status===filter);
+
+  return (
+    <div className="card" style={{ overflow:'hidden', marginBottom:18 }}>
+      <div className="card-pad" style={{ paddingBottom:0 }}>
+        <SectionHead title="คำขอเรียนชดเชยจากผู้ปกครอง">
+          <button className="icon-btn" style={{ width:30, height:30, border:0, color:'var(--text-3)' }} title="ปิด" onClick={onClose}><Icon n="x" size={15}/></button>
+        </SectionHead>
+        <div style={{ display:'flex', gap:6, padding:'10px 0 12px', flexWrap:'wrap' }}>
+          {[['pending','รอพิจารณา'],['approved','อนุมัติแล้ว'],['rejected','ปฏิเสธ'],['all','ทั้งหมด']].map(([k,l])=>(
+            <button key={k} className={"chip"+(filter===k?" active":"")} onClick={()=>setFilter(k)}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {visible.length===0 ? (
+        <div style={{ textAlign:'center', padding:'28px 16px', color:'var(--text-3)', fontSize:13 }}>
+          ไม่มีคำขอ{filter==='pending'?'รอพิจารณา':''}
+        </div>
+      ) : (
+        <table>
+          <thead><tr>
+            <th>นักเรียน</th><th>วัน/เวลาที่ขอ</th><th className="hide-mobile">วิชา</th>
+            <th className="hide-mobile">หมายเหตุ</th><th>สถานะ</th><th></th>
+          </tr></thead>
+          <tbody>
+            {visible.map(m=>{
+              const st = ST[m.status]||ST.pending;
+              return (
+                <tr key={m.id}>
+                  <td style={{ fontWeight:600 }}>{m.student_nick||m.student_name}</td>
+                  <td style={{ whiteSpace:'nowrap' }}>{d1(m.date)} · {m.start}–{m.end} น.
+                    <div style={{ fontSize:11.5, color:'var(--text-3)' }}>แจ้ง {d1(m.created_at)}</div>
+                  </td>
+                  <td className="hide-mobile" style={{ color:'var(--text-2)' }}>{catLabel(m.category)}</td>
+                  <td className="hide-mobile" style={{ color:'var(--text-2)', maxWidth:200 }}>{m.reason ? (m.reason.slice(0,80)+(m.reason.length>80?'…':'')) : '-'}
+                    {m.status==='approved' && m.teacher_name && <div style={{ fontSize:11.5, color:'var(--text-3)' }}>ครู {m.teacher_name}</div>}
+                    {m.status==='rejected' && m.review_note && <div style={{ fontSize:11.5, color:'var(--danger)' }}>{m.review_note}</div>}
+                  </td>
+                  <td><span style={{ display:'inline-block', padding:'3px 10px', borderRadius:99, fontSize:12, fontWeight:600, background:st.bg, color:st.color }}>{st.label}</span></td>
+                  <td>
+                    <div style={{ display:'flex', gap:4, justifyContent:'flex-end', alignItems:'center', flexWrap:'wrap' }}>
+                      {m.status==='pending' && (<>
+                        <select value={teacherSel[m.id]||''} onChange={e=>setTeacherSel(s=>({...s,[m.id]:e.target.value}))}
+                          style={{ fontSize:12, padding:'4px 6px', borderRadius:8, border:'1px solid var(--border)', maxWidth:120 }} title="มอบหมายครู (ถ้ามี)">
+                          <option value="">ครู (ไม่ระบุ)</option>
+                          {(DATA.TEACHERS||[]).map(t=><option key={t._dbId||t.id} value={t._dbId||t.id}>{t.nick||t.name}</option>)}
+                        </select>
+                        <button className="btn btn-sm" disabled={busy===m.id}
+                          style={{ background:'var(--ok)', color:'#fff', border:'none', fontSize:12, padding:'4px 10px', whiteSpace:'nowrap' }}
+                          onClick={()=>approve(m)}>{busy===m.id?'…':'✓ อนุมัติ'}</button>
+                        <button className="btn btn-sm" disabled={busy===m.id}
+                          style={{ color:'var(--danger)', border:'1px solid var(--danger)', background:'transparent', fontSize:12, padding:'4px 8px' }}
+                          onClick={()=>reject(m)}>ปฏิเสธ</button>
+                      </>)}
+                      <button className="icon-btn" style={{ width:30, height:30, border:0, color:'var(--text-3)' }} title="ลบ" onClick={()=>del(m)}>
+                        <Icon n="x" size={14}/>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 function Students(){
   useDataVersion();
   // pre-fill from topbar global search — sync only when it CHANGES, otherwise the
@@ -544,8 +673,8 @@ function StudentDrawer({ s, onClose }){
       billing_discount_value:s.billing_discount_value?String(s.billing_discount_value):"",
       ...bd });
     const init = (s.packages&&s.packages.length)
-      ? s.packages.map(p=>({ category:p.category||(s.cats&&s.cats[0])||'piano', package_id:p.package_id||null, sessions:p.sessions_total||0, remaining:p.sessions_remaining||0 }))
-      : [{ category:(s.cats&&s.cats[0])||'piano', package_id:null, sessions:s.pkg||0, remaining:s.remaining||0 }];
+      ? s.packages.map(p=>({ category:p.category||(s.cats&&s.cats[0])||'piano', package_id:p.package_id||null, sessions:p.sessions_total||0, remaining:p.sessions_remaining||0, expires:(p.expires_at||'').slice(0,10) }))
+      : [{ category:(s.cats&&s.cats[0])||'piano', package_id:null, sessions:s.pkg||0, remaining:s.remaining||0, expires:(s.course_expires_at||'').slice(0,10) }];
     setEditEnroll(init);
     setEdit(true);
   };
@@ -553,7 +682,8 @@ function StudentDrawer({ s, onClose }){
     if(!(f.name||"").trim()){ showToast("กรุณากรอกชื่อ","error"); return; }
     const packages = editEnroll.map(e=>({ category:e.category||null, package_id:e.package_id||null,
       name:(eePkgs.find(p=>String(p._dbId||p.id)===String(e.package_id))||{}).name||null,
-      sessions_total:Number(e.sessions)||0, sessions_remaining:Number(e.remaining)||0 }));
+      sessions_total:Number(e.sessions)||0, sessions_remaining:Number(e.remaining)||0,
+      expires_at:(e.expires&&/^\d{4}-\d{2}-\d{2}/.test(e.expires))?e.expires:null }));
     if(bdInfo.bad){ showToast("วันเกิดไม่ถูกต้อง","error"); return; }
     DATA.updateStudent(s.id, {
       name:f.name.trim(), nickname:(f.nickname||"").trim()||null,
@@ -709,6 +839,12 @@ function StudentDrawer({ s, onClose }){
                   <button type="button" className="icon-btn" disabled={editEnroll.length<=1} title="ลบแพ็กเกจ"
                     style={{width:34,height:34,border:0,color:editEnroll.length<=1?'var(--text-3)':'var(--danger)',opacity:editEnroll.length<=1?0.4:1}}
                     onClick={()=>removeEE(i)}><Icon n="x" size={15}/></button>
+                  {DATA.COURSE_EXPIRY_ENABLED && (
+                    <div style={{flex:'1 1 100%'}}>
+                      <div style={{fontSize:11,color:'var(--text-3)',marginBottom:3}}>วันหมดอายุคอร์ส (ไม่บังคับ)</div>
+                      <input type="date" value={e.expires||''} onChange={ev=>setEE(i,{expires:ev.target.value})}/>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -725,10 +861,11 @@ function StudentDrawer({ s, onClose }){
             else if(dt==='amount') net = Math.max(0, base-dv);
             return (
             <div className="field" style={{borderTop:'1px solid var(--border)',paddingTop:14,marginTop:4}}>
-              <label style={{display:'flex',alignItems:'flex-start',gap:9,cursor:'pointer'}}>
-                <input type="checkbox" checked={!!f.billing_enabled} onChange={e=>set('billing_enabled',e.target.checked)} style={{width:16,height:16,marginTop:2,flexShrink:0}}/>
-                <span>🔁 ออกบิลต่อคอร์สอัตโนมัติ<br/><span style={{fontSize:11,fontWeight:400,color:'var(--text-3)'}}>เมื่อคาบใกล้หมด ระบบจะออกใบแจ้งหนี้ + ส่ง QR ทาง LINE ให้เอง</span></span>
-              </label>
+              {(()=>{ const billLocked = DATA._isLiveMode && !planHas('autobill'); return (
+              <label style={{display:'flex',alignItems:'flex-start',gap:9,cursor:billLocked?'not-allowed':'pointer'}}>
+                <input type="checkbox" checked={!!f.billing_enabled} disabled={billLocked} onChange={e=>set('billing_enabled',e.target.checked)} style={{width:16,height:16,marginTop:2,flexShrink:0}}/>
+                <span>🔁 ออกบิลต่อคอร์สอัตโนมัติ {billLocked && <span style={{fontSize:9,fontWeight:800,color:'var(--accent-ink,#B45309)',background:'var(--accent-soft,#FEF3C7)',padding:'1px 6px',borderRadius:10}}>ACADEMY</span>}<br/><span style={{fontSize:11,fontWeight:400,color:'var(--text-3)'}}>{billLocked ? 'อัปเกรดเป็น ACADEMY เพื่อให้ระบบออกบิลต่อคอร์ส + ส่ง QR ทาง LINE ให้อัตโนมัติ' : 'เมื่อคาบใกล้หมด ระบบจะออกใบแจ้งหนี้ + ส่ง QR ทาง LINE ให้เอง'}</span></span>
+              </label>); })()}
               {f.billing_enabled && (
                 <div style={{marginTop:12,display:'flex',flexDirection:'column',gap:10,paddingLeft:4}}>
                   <div>
@@ -805,6 +942,15 @@ function StudentDrawer({ s, onClose }){
             ) : (
               <div className="kv"><span className="k">แพ็กเกจคอร์ส</span><span className="v">{s.pkg} ครั้ง · {s.dur===60?"1 ชม.":"30 นาที"}/ครั้ง{(s.packages&&s.packages[0]&&s.packages[0].round>1)?` · คอร์สที่ ${s.packages[0].round}`:''}</span></div>
             )}
+            {DATA.COURSE_EXPIRY_ENABLED && s.course_expires_at && (()=>{
+              const d=new Date(s.course_expires_at+'T00:00:00');
+              const dateTxt = isNaN(d)?s.course_expires_at:`${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()+543}`;
+              const col = s.course_expired ? 'var(--danger)' : s.course_expires_soon ? 'var(--warn,#b8860b)' : 'var(--text)';
+              const tail = s.course_expired ? ' · หมดอายุแล้ว'
+                : (s.course_expiry_days!=null && s.course_expiry_days<=30) ? ` · เหลือ ${s.course_expiry_days} วัน` : '';
+              return <div className="kv"><span className="k">วันหมดอายุคอร์ส</span>
+                <span className="v" style={{color:col,fontWeight:s.course_expired||s.course_expires_soon?600:400}}>⏳ {dateTxt}{tail}</span></div>;
+            })()}
             <div className="kv"><span className="k">ครูผู้สอน</span><span className="v">{s.teacher}</span></div>
             <div className="kv"><span className="k">ผู้ปกครอง</span><span className="v">{s.guardian}</span></div>
             <div className="kv"><span className="k">เบอร์ติดต่อ</span><span className="v">{s.phone}</span></div>
@@ -1261,22 +1407,26 @@ function AddStudentDrawer({ onClose, onSaved }){
     return { ...p, categories: has ? p.categories.filter(c=>c!==key) : [...p.categories, key] };
   });
 
+  const expiryOn = !!DATA.COURSE_EXPIRY_ENABLED;
+  // today + N days → YYYY-MM-DD, for prefilling expiry from a package's validity window
+  const isoPlus = (n)=>{ if(!(Number(n)>0)) return ''; const d=new Date(); d.setDate(d.getDate()+Number(n)); return d.toISOString().slice(0,10); };
+
   // multi-package enrollments (one line per subject/course the student takes)
   const [enrollments, setEnrollments] = useState(()=>{
     const p0 = pkgs[0];
-    return [{ category:'piano', package_id: p0?(p0._dbId||p0.id):null, sessions: p0?p0.sessions:10, remaining: p0?p0.sessions:10 }];
+    return [{ category:'piano', package_id: p0?(p0._dbId||p0.id):null, sessions: p0?p0.sessions:10, remaining: p0?p0.sessions:10, expires: isoPlus(p0&&p0.valid_days) }];
   });
   const setEnroll = (i, patch)=> setEnrollments(es=> es.map((e,j)=> j===i ? {...e, ...patch} : e));
   const removeEnroll = (i)=> setEnrollments(es=> es.length>1 ? es.filter((_,j)=>j!==i) : es);
   const addEnroll = ()=> setEnrollments(es=>{
     const p0 = pkgs[0]; const used = es.map(e=>e.category);
     const nextCat = (f.categories.find(c=>!used.includes(c))) || f.categories[0] || 'piano';
-    return [...es, { category:nextCat, package_id: p0?(p0._dbId||p0.id):null, sessions: p0?p0.sessions:10, remaining: p0?p0.sessions:10 }];
+    return [...es, { category:nextCat, package_id: p0?(p0._dbId||p0.id):null, sessions: p0?p0.sessions:10, remaining: p0?p0.sessions:10, expires: isoPlus(p0&&p0.valid_days) }];
   });
   const onEnrollPkg = (i, v)=>{
     if(v.startsWith('n')){ const n=Number(v.slice(1)); setEnroll(i,{ package_id:null, sessions:n, remaining:n }); return; }
     const p = pkgs.find(x=>String(x._dbId||x.id)===v);
-    if(p) setEnroll(i, { package_id:p._dbId||p.id, sessions:p.sessions, remaining:p.sessions });
+    if(p) setEnroll(i, { package_id:p._dbId||p.id, sessions:p.sessions, remaining:p.sessions, expires: isoPlus(p.valid_days) });
   };
   const totalRemain = enrollments.reduce((a,e)=>a+(Number(e.remaining)||0),0);
 
@@ -1321,6 +1471,7 @@ function AddStudentDrawer({ onClose, onSaved }){
         name: (pkgs.find(p=>String(p._dbId||p.id)===String(e.package_id))||{}).name||null,
         sessions_total: Number(e.sessions)||0,
         sessions_remaining: Number(e.remaining)||0,
+        expires_at: (e.expires&&/^\d{4}-\d{2}-\d{2}/.test(e.expires))?e.expires:null,
       })),
       package_id: enrollments[0]?.package_id||null,
       sessions_total: enrollments.reduce((a,e)=>a+(Number(e.sessions)||0),0),
@@ -1495,6 +1646,12 @@ function AddStudentDrawer({ onClose, onSaved }){
               <button type="button" className="icon-btn" disabled={enrollments.length<=1} title="ลบแพ็กเกจ"
                 style={{width:34,height:34,border:0,color:enrollments.length<=1?'var(--text-3)':'var(--danger)',opacity:enrollments.length<=1?0.4:1}}
                 onClick={()=>removeEnroll(i)}><Icon n="x" size={15}/></button>
+              {expiryOn && (
+                <div style={{flex:'1 1 100%'}}>
+                  <div style={{fontSize:11,color:'var(--text-3)',marginBottom:3}}>วันหมดอายุคอร์ส (ไม่บังคับ)</div>
+                  <input type="date" value={e.expires||''} onChange={ev=>setEnroll(i,{expires:ev.target.value})}/>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -2701,10 +2858,26 @@ function PackagePricing({ showToast }){
   const [adding, setAdding] = useState(false);
   const [editingName, setEditingName] = useState(null);
   const [nameDraft, setNameDraft] = useState('');
+  const [editingValid, setEditingValid] = useState(null);
+  const [validDraft, setValidDraft] = useState('');
+  const expiryOn = !!DATA.COURSE_EXPIRY_ENABLED;
 
   const pidOf = (p)=> p._dbId||p.id;
   const startEdit = (p)=>{ setEditing(pidOf(p)); setDraft(String(p.price)); };
   const startEditName = (p)=>{ setEditingName(pidOf(p)); setNameDraft(p.name||''); };
+  const startEditValid = (p)=>{ setEditingValid(pidOf(p)); setValidDraft(p.valid_days?String(p.valid_days):''); };
+  const commitValid = async(p)=>{
+    const v = parseInt(String(validDraft).replace(/[^0-9]/g,''),10);
+    const val = v>0 ? v : null;
+    if(isLive && DATA.updatePackage){
+      try{ await DATA.updatePackage(p._dbId, {valid_days:val}); showToast(val?`ตั้งอายุคอร์ส ${val} วันแล้ว ✓`:'ตั้งเป็นไม่หมดอายุแล้ว ✓'); }
+      catch(e){ showToast('บันทึกไม่สำเร็จ ❌'); }
+    } else {
+      setDemoPkgs(prev=> prev.map(x=> x.id===p.id ? {...x, valid_days:val} : x));
+      showToast('บันทึกแล้ว ✓');
+    }
+    setEditingValid(null);
+  };
   const commitName = async(p)=>{
     const v = (nameDraft||'').trim() || `คอร์ส ${p.sessions} ครั้ง`;
     if(isLive && DATA.updatePackage){
@@ -2781,6 +2954,22 @@ function PackagePricing({ showToast }){
                 </div>
               )}
               <div style={{ fontSize:12.5, color:'var(--text-3)', marginTop:2 }}>{p.sessions} ครั้ง · {dur} / ครั้ง</div>
+              {expiryOn && (editingValid===pid ? (
+                <div style={{ display:'flex', gap:6, alignItems:'center', marginTop:6 }}>
+                  <input autoFocus type="number" min={0} value={validDraft} onChange={e=>setValidDraft(e.target.value)}
+                    onKeyDown={e=>{ if(e.key==='Enter') commitValid(p); if(e.key==='Escape') setEditingValid(null); }}
+                    placeholder="วัน (เว้นว่าง=ไม่หมดอายุ)"
+                    style={{ width:'100%', minWidth:0, border:'1px solid var(--primary)', borderRadius:8, padding:'5px 8px', fontSize:12.5, outline:'none', boxShadow:'0 0 0 3px var(--primary-soft)' }}/>
+                  <button className="icon-btn" style={{ width:26, height:26, border:0, color:'var(--ok)' }} onClick={()=>commitValid(p)}><Icon n="check" size={14}/></button>
+                  <button className="icon-btn" style={{ width:26, height:26, border:0 }} onClick={()=>setEditingValid(null)}><Icon n="x" size={13}/></button>
+                </div>
+              ) : (
+                <div onClick={()=>startEditValid(p)} title="คลิกเพื่อตั้งอายุคอร์ส"
+                  style={{ fontSize:12, color:p.valid_days?'var(--warn,#b8860b)':'var(--text-3)', marginTop:5, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 }}>
+                  ⏳ {p.valid_days ? `หมดอายุใน ${p.valid_days} วัน` : 'ไม่มีวันหมดอายุ'}
+                  <Icon n="edit" size={11} style={{ opacity:0.5 }}/>
+                </div>
+              ))}
 
               <div style={{ marginTop:16, minHeight:46 }}>
                 {isEd ? (
@@ -2836,10 +3025,11 @@ function PackagePricing({ showToast }){
 
 /* ---- add package drawer ---- */
 function AddPackageDrawer({ onClose, onSaved }){
-  const [f, setF] = useState({ name:'', sessions:'10', duration_min:'60', price:'' });
+  const [f, setF] = useState({ name:'', sessions:'10', duration_min:'60', price:'', valid_days:'' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const set = (k,v)=>setF(p=>({...p,[k]:v}));
+  const expiryOn = !!DATA.COURSE_EXPIRY_ENABLED;
   const priceNum = parseFloat(f.price)||0;
   const sessNum  = parseInt(f.sessions)||1;
   const perClass = priceNum>0 && sessNum>0 ? Math.round(priceNum/sessNum) : 0;
@@ -2852,6 +3042,7 @@ function AddPackageDrawer({ onClose, onSaved }){
       sessions: parseInt(f.sessions)||10,
       duration_min: parseInt(f.duration_min)||60,
       price: parseFloat(f.price)||0,
+      valid_days: (parseInt(f.valid_days)>0) ? parseInt(f.valid_days) : null,
     };
     if(DATA._isLiveMode && DATA.addPackage){
       try{ await DATA.addPackage(payload); onSaved(); }
@@ -2896,6 +3087,13 @@ function AddPackageDrawer({ onClose, onSaved }){
         <input type="number" value={f.price} onChange={e=>set('price',e.target.value)} placeholder="เช่น 3500" min={0}/>
         {perClass>0 && <div style={{fontSize:12.5,color:'var(--primary-ink)',marginTop:5,fontWeight:600}}>เฉลี่ย {DATA.baht(perClass)}/ครั้ง</div>}
       </div>
+      {expiryOn && (
+        <div className="field">
+          <label>อายุคอร์ส (วัน) <span style={{fontSize:11,color:'var(--muted)'}}>ไม่บังคับ</span></label>
+          <input type="number" value={f.valid_days} onChange={e=>set('valid_days',e.target.value)} placeholder="เช่น 90 — เว้นว่าง = ไม่หมดอายุ" min={0}/>
+          <div style={{fontSize:12,color:'var(--text-3)',marginTop:4}}>นับจากวันที่ซื้อ/ต่อคอร์ส — ระบบจะคำนวณวันหมดอายุให้นักเรียนอัตโนมัติ (แก้รายคนได้)</div>
+        </div>
+      )}
     </Drawer>
   );
 }

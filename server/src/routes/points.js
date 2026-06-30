@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { all, get, run, tierOf } from '../db.js';
 import { wrap, required, bad } from '../util.js';
-import { ownStudentIds } from '../auth.js';
+import { requireFeature, ownStudentIds } from '../auth.js';
 
 const r = Router();
 
@@ -25,7 +25,7 @@ r.get('/:studentId', wrap((req, res) => {
 }));
 
 // POST /api/points — manual adjustment by staff (give reward points / deduct).
-r.post('/', wrap((req, res) => {
+r.post('/', requireFeature('points', 'ระบบแต้มสะสมใช้ได้ในแผน ACADEMY ขึ้นไป — อัปเกรดเพื่อเปิดใช้งาน'), wrap((req, res) => {
   const b = required(req.body, ['student_id', 'delta']);
   // clamp a single adjustment to a sane range so a typo can't blow up a balance
   const delta = Math.max(-500, Math.min(500, Math.trunc(Number(b.delta) || 0)));

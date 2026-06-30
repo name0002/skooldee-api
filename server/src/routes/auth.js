@@ -106,6 +106,7 @@ r.get('/me', requireAuth, wrap((req, res) => {
     teacher_id: row.teacher_id || null, phone: row.phone || null,
     permissions: resolvePerms(row), // effective { scope, pages } — drives nav + write buttons
     is_platform_admin: isPlatformAdmin(row.email),
+    email_configured: emailEnabled,
   };
   // Return the FULL safe school object (not just the basics) — the app hydrates
   // DATA._schoolRaw from this on every load, so settings like business hours,

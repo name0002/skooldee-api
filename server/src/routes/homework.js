@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { all, get, run } from '../db.js';
 import { wrap, required, bad, recipientWords } from '../util.js';
 import { pushToParent } from '../line-push.js';
-import { requirePage, ownStudentIds } from '../auth.js';
+import { requirePage, requireFeature, ownStudentIds } from '../auth.js';
 
 const r = Router();
 
@@ -24,7 +24,7 @@ r.get('/', wrap((req, res) => {
 }));
 
 // POST /api/homework — assign. notify=true sends a LINE message to the linked parent now.
-r.post('/', canManage, wrap(async (req, res) => {
+r.post('/', canManage, requireFeature('homework', 'การบ้านใช้ได้ในแผน ACADEMY ขึ้นไป — อัปเกรดเพื่อเปิดใช้งาน'), wrap(async (req, res) => {
   const b = required(req.body, ['student_id', 'title']);
   if (!ownsStudent(req, b.student_id)) throw bad('student not found', 404);
   const student = get('SELECT id, name, nickname, recipient_type, age, honorific FROM students WHERE id = ? AND school_id = ?', b.student_id, req.schoolId);

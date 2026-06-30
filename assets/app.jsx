@@ -33,6 +33,11 @@ function mapStudent(s){
     billing_discount_type:s.billing_discount_type||null,
     billing_discount_value:s.billing_discount_value||0,
     packages:(function(){ try{ if(s.packages_json){ var a=JSON.parse(s.packages_json); if(Array.isArray(a)) return a; } }catch(e){} return []; })(),
+    course_expires_at:s.course_expires_at||null,
+    course_expired:!!s.course_expired,
+    course_expires_soon:!!s.course_expires_soon,
+    course_expiry_days:(s.course_expiry_days!=null?s.course_expiry_days:null),
+    course_expiry_subject:s.course_expiry_subject||null,
   };
 }
 
@@ -300,10 +305,18 @@ function AuthRoot(){
       DATA.LEAVES_PENDING = canManage && window.API.leaves
         ? await window.API.leaves('pending').catch(()=>[])
         : [];
+      // pending parent makeup requests — owner/admin only (drives the Schedule-page badge)
+      DATA.MAKEUPS_PENDING = canManage && window.API.makeupRequests
+        ? await window.API.makeupRequests('pending').catch(()=>[])
+        : [];
 
       /* -- store raw school & user for Settings screen -- */
       DATA._schoolRaw = { ...school };
       DATA._userRaw   = { ...user };
+      // plan entitlements resolved server-side (plans.js). null ⇒ older backend ⇒ treat as full access.
+      DATA._features   = (school.features && typeof school.features==='object') ? school.features : null;
+      DATA._planLabel  = school.plan_label || null;
+      DATA._studentCap = (school.student_cap!=null) ? school.student_cap : null;
       DATA._isPlatformAdmin = !!(user && user.is_platform_admin);
       // effective access control (resolved server-side): { scope, pages:{ pageId: none|view|manage } }
       DATA._perms = (user && user.permissions && typeof user.permissions==='object')
@@ -316,6 +329,7 @@ function AuthRoot(){
             : {}; }catch(e){ DATA.ASSESS_CRITERIA = {}; }
       DATA.SHOW_ASSESS_PARENTS = !!school.show_assessments_to_parents;
       DATA.SHOW_COURSE_NO_PARENTS = !!school.show_course_no_to_parents;
+      DATA.COURSE_EXPIRY_ENABLED = !!school.course_expiry_enabled;
       DATA.PAYMENT_QR_IMAGE = school.payment_qr_image || null;
       DATA.SCHOOL_LOGO = school.logo_image || null;
       // business hours → drive the schedule grid + time pickers
@@ -468,6 +482,7 @@ function AuthRoot(){
           price: p.price||0,
           is_default: !!p.is_default,
           sort: p.sort||0,
+          valid_days: p.valid_days||null,
         };
       });
 
@@ -620,6 +635,11 @@ function AuthRoot(){
       DATA.setShowCourseNoParents = async function(on){
         await DATA.updateSchool({ show_course_no_to_parents: !!on });
         DATA.SHOW_COURSE_NO_PARENTS = !!on;
+        bumpData();
+      };
+      DATA.setCourseExpiryEnabled = async function(on){
+        await DATA.updateSchool({ course_expiry_enabled: !!on });
+        DATA.COURSE_EXPIRY_ENABLED = !!on;
         bumpData();
       };
 
@@ -833,7 +853,7 @@ function AuthRoot(){
           name:p.name||('คอร์ส '+p.sessions+' ครั้ง'),
           sessions:p.sessions||10, duration_min:p.duration_min||60,
           dur:p.duration_min||60, price:p.price||0,
-          is_default:!!p.is_default, sort:p.sort||0,
+          is_default:!!p.is_default, sort:p.sort||0, valid_days:p.valid_days||null,
         });
         bumpData();
       };
@@ -843,6 +863,7 @@ function AuthRoot(){
         if(p) Object.assign(p, {
           price: updated.price!=null ? updated.price : (patch.price||p.price),
           name:  updated.name  ||patch.name  ||p.name,
+          valid_days: updated.valid_days!==undefined ? updated.valid_days : (patch.valid_days!==undefined ? patch.valid_days : p.valid_days),
         });
         bumpData();
       };
@@ -946,6 +967,47 @@ function canAccess(pageId, role){
   if(pageId==='settings') return role==='owner' || role==='admin';
   if(pageId==='superadmin') return !!(DATA._isPlatformAdmin);
   return PERM_LEVELS[pageLevel(pageId)] >= 1;
+}
+// ---- Plan feature gating (mirrors server plans.js entitlements) ----
+// Which nav page requires which plan feature. Pages not listed are available on every plan.
+const PLAN_PAGE_FEATURE = { homework:'homework', referrals:'points', reports:'reports' };
+// Demo mode or a backend that didn't send entitlements ⇒ allow (graceful, never hard-block on missing data).
+function planHas(feat){
+  if(!feat) return true;
+  if(!DATA._isLiveMode) return true;
+  if(!DATA._features) return true;
+  return !!DATA._features[feat];
+}
+function pageLocked(pageId){
+  const f = PLAN_PAGE_FEATURE[pageId];
+  return f ? !planHas(f) : false;
+}
+// Upgrade-prompt panel shown in place of a feature the current plan doesn't include.
+function LockedFeature({ feat, onUpgrade, upgrading, go }){
+  const META = {
+    homework: { icon:'📚', title:'การบ้าน', desc:'มอบหมายการบ้านและส่งแจ้งเตือนถึงผู้ปกครองผ่าน LINE อัตโนมัติ พร้อมติดตามสถานะการส่งงาน' },
+    points:   { icon:'🎁', title:'แต้มสะสม & แนะนำเพื่อน', desc:'สะสมแต้มจากการเข้าเรียน ระดับสมาชิก และระบบแนะนำเพื่อนรับแต้มทั้งผู้แนะนำและเพื่อนใหม่' },
+    reports:  { icon:'📈', title:'รายงาน & พยากรณ์รายได้', desc:'กราฟรายได้ย้อนหลัง พยากรณ์ยอดเดือนหน้า และตั้งเป้าธุรกิจวัดผลได้จริง' },
+    booking:  { icon:'🗓️', title:'จองคลาสออนไลน์', desc:'ให้ผู้ปกครองและลูกค้าใหม่จองคลาสเรียนกลุ่ม/เดี่ยว/ชดเชย/ทดลองเองผ่านลิงก์' },
+    autobill: { icon:'🧾', title:'วางบิลอัตโนมัติ', desc:'ออกบิลต่อคอร์สและส่ง LINE ให้อัตโนมัติเมื่อคอร์สใกล้หมด ส่วนลดรายคนติดไปทุกบิล' },
+  };
+  const m = META[feat] || { icon:'🔒', title:'ฟีเจอร์นี้', desc:'' };
+  return (
+    <div style={{ maxWidth:480, margin:'56px auto', textAlign:'center', padding:'40px 28px',
+       background:'var(--card,#fff)', border:'1px solid var(--border)', borderRadius:18 }}>
+      <div style={{ fontSize:46, marginBottom:10 }}>{m.icon}</div>
+      <span style={{ display:'inline-block', fontSize:12, fontWeight:800, letterSpacing:'.04em',
+        color:'var(--accent-ink,#B45309)', background:'var(--accent-soft,#FEF3C7)', padding:'4px 12px', borderRadius:20, marginBottom:12 }}>ACADEMY ขึ้นไป</span>
+      <div style={{ fontWeight:800, fontSize:21, marginBottom:8 }}>{m.title}</div>
+      <div style={{ fontSize:14.5, color:'var(--text-2)', marginBottom:22, lineHeight:1.6 }}>{m.desc}</div>
+      <button className="btn btn-primary" disabled={upgrading} onClick={onUpgrade} style={{ minWidth:240 }}>
+        {upgrading ? 'กำลังโหลด…' : 'อัปเกรดเป็น ACADEMY ฿1,990/เดือน'}
+      </button>
+      <div style={{ marginTop:14 }}>
+        <button className="btn btn-ghost btn-sm" onClick={()=>go('dashboard')}>กลับหน้าภาพรวม</button>
+      </div>
+    </div>
+  );
 }
 // default to full access until a live login resolves real perms (covers demo mode too)
 if(!DATA._perms) DATA._perms = { scope:'all', pages:{} };
@@ -1064,12 +1126,13 @@ function App({ liveLogout }){
     }
   }, []);
 
-  const doUpgrade = async (plan, cycle)=>{
-    setUpgrading(true);
-    try{
-      const r = await window.API.stripeCheckout(plan||'pro', cycle||'mo');
-      window.location.href = r.url;
-    } catch(e){ alert(e.message||'เกิดข้อผิดพลาด กรุณาลองใหม่'); setUpgrading(false); }
+  // Upgrade entry points (sidebar + locked-feature prompts) now route to the plan
+  // picker in Settings → บัญชีและความปลอดภัย, so the user chooses STUDIO/ACADEMY +
+  // monthly/yearly there instead of being sent straight to ACADEMY checkout.
+  const doUpgrade = ()=>{
+    DATA._settingsJump = 'account';
+    go('settings');
+    bumpData();
   };
 
   React.useEffect(()=>{
@@ -1125,7 +1188,9 @@ function App({ liveLogout }){
             <button className={"nav-item"+(page===n.id?" active":"")} onClick={()=>go(n.id)}>
               <Icon n={n.icon} size={20}/>
               <span>{n.label}</span>
-              {n.badge && <span className="nav-badge">{n.badge}</span>}
+              {pageLocked(n.id)
+                ? <span className="nav-badge" style={{ background:'var(--accent-soft,#FEF3C7)', color:'var(--accent-ink,#B45309)', fontSize:10, fontWeight:800, letterSpacing:'.03em' }}>ACADEMY</span>
+                : n.badge ? <span className="nav-badge">{n.badge}</span> : null}
             </button>
           </React.Fragment>
         ))}
@@ -1135,7 +1200,7 @@ function App({ liveLogout }){
             const sch = DATA._schoolRaw || {};
             const planType = sch.plan || 'trial';
             const planExpires = sch.plan_expires;
-            const isPaid = ['starter','pro','premium'].includes(planType);
+            const isPaid = ['studio','academy','enterprise'].includes(planType);
             if(!DATA._isLiveMode || isPaid) return null;
             const daysLeft = planExpires ? Math.max(0, Math.ceil((new Date(planExpires)-Date.now())/86400_000)) : null;
             const expired = planType==='cancelled' || (daysLeft!==null && daysLeft<=0);
@@ -1212,7 +1277,9 @@ function App({ liveLogout }){
         )}
         <main className="content">
           {allowed
-            ? <Screen go={go}/>
+            ? (pageLocked(page)
+                ? <LockedFeature feat={PLAN_PAGE_FEATURE[page]} upgrading={upgrading} go={go} onUpgrade={()=>doUpgrade('academy','mo')}/>
+                : <Screen go={go}/>)
             : <div style={{ textAlign:'center', padding:'72px 24px', color:'var(--text-3)' }}>
                 <div style={{ fontSize:42, marginBottom:12 }}>🔒</div>
                 <div style={{ fontWeight:700, fontSize:16, color:'var(--text)' }}>ไม่มีสิทธิ์เข้าถึงหน้านี้</div>

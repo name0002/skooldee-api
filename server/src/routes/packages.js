@@ -13,9 +13,11 @@ r.get('/', wrap((req, res) => {
 // pricing is financial — only owner/admin may create/edit/remove packages
 r.post('/', requireRole('owner', 'admin'), wrap((req, res) => {
   const b = required(req.body, ['name', 'sessions', 'duration_min', 'price']);
+  // valid_days: positive int = expires that many days after purchase; null/0 = never expires
+  const validDays = b.valid_days != null && Number(b.valid_days) > 0 ? parseInt(b.valid_days, 10) : null;
   const result = run(
-    'INSERT INTO packages (school_id, name, sessions, duration_min, price, is_default, sort) VALUES (?,?,?,?,?,?,?)',
-    req.schoolId, b.name, b.sessions, b.duration_min, b.price, b.is_default ? 1 : 0, b.sort || 0);
+    'INSERT INTO packages (school_id, name, sessions, duration_min, price, is_default, sort, valid_days) VALUES (?,?,?,?,?,?,?,?)',
+    req.schoolId, b.name, b.sessions, b.duration_min, b.price, b.is_default ? 1 : 0, b.sort || 0, validDays);
   res.status(201).json(get('SELECT * FROM packages WHERE id = ?', Number(result.lastInsertRowid)));
 }));
 
@@ -26,6 +28,11 @@ r.patch('/:id', requireRole('owner', 'admin'), wrap((req, res) => {
   const fields = ['name', 'sessions', 'duration_min', 'price', 'is_default', 'sort'];
   const sets = [], vals = [];
   for (const f of fields) if (f in req.body) { sets.push(`${f} = ?`); vals.push(req.body[f]); }
+  // valid_days is nullable — an explicit null/0 clears the expiry window (course never expires)
+  if ('valid_days' in req.body) {
+    sets.push('valid_days = ?');
+    vals.push(req.body.valid_days != null && Number(req.body.valid_days) > 0 ? parseInt(req.body.valid_days, 10) : null);
+  }
   if (!sets.length) throw bad('no fields to update');
   run(`UPDATE packages SET ${sets.join(', ')} WHERE id = ? AND school_id = ?`, ...vals, p.id, req.schoolId);
   res.json(get('SELECT * FROM packages WHERE id = ?', p.id));

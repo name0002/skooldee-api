@@ -368,6 +368,29 @@ CREATE TABLE IF NOT EXISTS teacher_leaves (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_teacher_leaves_school ON teacher_leaves(school_id, status);
+
+-- Make-up class requests proposed by a parent (through the self-service booking link
+-- with their child's token). A parent picks a date/time/subject; an owner/admin approves
+-- or rejects. On approval a schedule_exceptions 'makeup' row is created (the class lands
+-- on the live timetable) and the parent + assigned teacher are notified over LINE.
+CREATE TABLE IF NOT EXISTS makeup_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+  student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  category TEXT,                                  -- subject the makeup is for (optional)
+  date TEXT NOT NULL,                             -- requested YYYY-MM-DD
+  start_min INTEGER NOT NULL,                     -- minutes from 00:00
+  end_min INTEGER NOT NULL,
+  reason TEXT,                                    -- parent's note (e.g. which class was missed)
+  status TEXT NOT NULL DEFAULT 'pending',         -- pending | approved | rejected | cancelled
+  teacher_id INTEGER REFERENCES teachers(id) ON DELETE SET NULL, -- assigned by admin on approval
+  exception_id INTEGER,                           -- the schedule_exceptions row created on approval
+  reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TEXT,
+  review_note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_makeup_requests_school ON makeup_requests(school_id, status);
 `;
 
 export function initSchema() {
@@ -425,6 +448,14 @@ export function initSchema() {
   // course-round number (per subject, stored in students.packages_json[].round) — owner always
   // sees it; parents only when this toggle is on.
   addCol('ALTER TABLE schools ADD COLUMN show_course_no_to_parents INTEGER NOT NULL DEFAULT 0');
+  // course-expiry (opt-in per school): a package can carry a default validity window, and a
+  // student's enrollment then gets a concrete expires_at. NON-DESTRUCTIVE — remaining sessions
+  // stay usable; the system only flags the expired/expiring state and (optionally) reminds.
+  addCol('ALTER TABLE schools ADD COLUMN course_expiry_enabled INTEGER NOT NULL DEFAULT 0');
+  addCol('ALTER TABLE packages ADD COLUMN valid_days INTEGER'); // default validity in days; NULL = never expires
+  // soonest active-course expiry — aggregate mirror of packages_json[].expires_at (min), kept in
+  // sync on enroll/edit/renew so lists can flag without parsing JSON per row.
+  addCol('ALTER TABLE students ADD COLUMN course_expires_at TEXT');
   // customizable message the admin copies when inviting a parent to link LINE.
   // Placeholders: {ชื่อ} = student nick/name, {ลิงก์} = the one-tap LIFF link, {ผู้รับ} = relationship-aware greeting.
   addCol('ALTER TABLE schools ADD COLUMN invite_message_template TEXT');

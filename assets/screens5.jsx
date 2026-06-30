@@ -4,7 +4,10 @@
 function Settings({ go }){
   useDataVersion();
   const [toast, showToast] = useToast();
-  const [section, setSection] = useState('school'); // 'school' | 'categories' | 'profile' | 'account'
+  // jump straight to a tab when navigated here with a hint (e.g. upgrade button → 'account')
+  const [section, setSection] = useState(()=>{ const j=DATA._settingsJump; DATA._settingsJump=null; return j||'school'; });
+  // also honour the hint when already mounted on Settings (bumpData re-renders us)
+  React.useEffect(()=>{ if(DATA._settingsJump){ setSection(DATA._settingsJump); DATA._settingsJump=null; window.scrollTo(0,0); } });
 
   const tab = (id, label)=>(
     <button
@@ -638,6 +641,130 @@ function ProfileSettingsSection({ showToast }){
 }
 
 /* ===================== Account & Security Settings ===================== */
+// Subscription plans offered for self-serve checkout (mirrors index.html pricing + plans.js gates).
+// ENTERPRISE is sales-led (contact form) — no Stripe price, so it's not a selectable card here.
+const SUB_PLANS = [
+  { key:'studio',  label:'STUDIO',  sub:'สตูดิโอเล็ก / ครูฉายเดี่ยว', mo:890,  yr:712,  yrTotal:8544,
+    feats:['นักเรียนที่กำลังเรียนสูงสุด 60 คน','ตารางเรียน · เช็คชื่อ · ปฏิทินวันหยุด','การเงิน · QR/Payso · แนบสลิป','แจ้งเตือน LINE (เช็คชื่อ & บิล) + พอร์ทัลผู้ปกครอง'] },
+  { key:'academy', label:'ACADEMY', sub:'โรงเรียนกำลังเติบโต', mo:1990, yr:1592, yrTotal:19104, popular:true,
+    feats:['นักเรียนที่กำลังเรียนสูงสุด 250 คน','ทุกอย่างใน STUDIO + บัญชีครู','LINE อัตโนมัติเต็ม + การบ้าน · แต้ม · แนะนำเพื่อน','จองคลาสออนไลน์ · วางบิลอัตโนมัติ','รายงาน & พยากรณ์รายได้ · ผู้ช่วย AI'] },
+];
+const PLAN_LABELS = { trial:'ทดลองใช้ฟรี', studio:'STUDIO', academy:'ACADEMY', enterprise:'ENTERPRISE', cancelled:'หมดอายุ' };
+
+function SubscriptionCard({ showToast }){
+  const school   = DATA._schoolRaw || {};
+  const curPlan  = school.plan || 'trial';
+  const isPaid   = ['studio','academy','enterprise'].includes(curPlan);
+  const expires  = school.plan_expires ? new Date(school.plan_expires) : null;
+  const daysLeft = expires ? Math.max(0, Math.ceil((expires - Date.now())/86400_000)) : null;
+  const expired  = curPlan==='cancelled' || (curPlan==='trial' && daysLeft!==null && daysLeft<=0);
+
+  const [cycle, setCycle] = useState('mo');           // 'mo' | 'yr'
+  const [busy,  setBusy]  = useState('');             // plan key being processed, or 'portal'
+
+  const checkout = async (planKey)=>{
+    if(!window.API || !window.API.stripeCheckout){ showToast('ระบบสมัครสมาชิกยังไม่พร้อมใช้งาน','error'); return; }
+    setBusy(planKey);
+    try{
+      const r = await window.API.stripeCheckout(planKey, cycle);
+      window.location.href = r.url;
+    } catch(e){ showToast(e.message||'เปิดหน้าชำระเงินไม่สำเร็จ กรุณาลองใหม่','error'); setBusy(''); }
+  };
+  const manageBilling = async ()=>{
+    if(!window.API || !window.API.stripePortal){ showToast('ระบบจัดการสมาชิกยังไม่พร้อมใช้งาน','error'); return; }
+    setBusy('portal');
+    try{
+      const r = await window.API.stripePortal();
+      window.location.href = r.url;
+    } catch(e){ showToast(e.message||'เปิดหน้าจัดการสมาชิกไม่สำเร็จ','error'); setBusy(''); }
+  };
+
+  return (
+    <SettingsCard title="แพ็กเกจสมาชิก" sub="เลือกแพ็กเกจที่เหมาะกับโรงเรียนของคุณ — เปลี่ยน อัปเกรด หรือยกเลิกได้ทุกเมื่อ">
+      {/* current status */}
+      <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap',
+        padding:'12px 14px', borderRadius:12, marginBottom:18,
+        background: expired ? 'var(--danger-soft)' : 'var(--primary-soft)' }}>
+        <div style={{ flex:1, minWidth:200 }}>
+          <div style={{ fontSize:12.5, color:'var(--text-3)' }}>แพ็กเกจปัจจุบัน</div>
+          <div style={{ fontWeight:700, fontSize:15.5, color: expired?'var(--danger)':'var(--primary-ink)' }}>
+            {PLAN_LABELS[curPlan] || curPlan}
+            {!expired && daysLeft!==null && curPlan==='trial' && <span style={{ fontWeight:500, fontSize:12.5, color:'var(--text-3)' }}> · เหลือ {daysLeft} วัน</span>}
+            {isPaid && expires && <span style={{ fontWeight:500, fontSize:12.5, color:'var(--text-3)' }}> · ต่ออายุ {expires.toISOString().slice(0,10)}</span>}
+          </div>
+        </div>
+        {isPaid && (
+          <button className="btn" disabled={busy==='portal'} onClick={manageBilling}
+            style={{ fontSize:13, padding:'7px 16px', whiteSpace:'nowrap' }}>
+            {busy==='portal' ? 'กำลังเปิด…' : 'จัดการการชำระเงิน'}
+          </button>
+        )}
+      </div>
+
+      {/* billing-cycle toggle */}
+      <div style={{ display:'flex', gap:6, background:'var(--surface-2)', borderRadius:10, padding:4, width:'fit-content', marginBottom:18 }}>
+        {[['mo','รายเดือน'],['yr','รายปี · ประหยัด 20%']].map(([c,lbl])=>(
+          <button key={c} onClick={()=>setCycle(c)} style={{
+            padding:'7px 16px', borderRadius:7, border:'none', cursor:'pointer', fontSize:13, fontWeight:600,
+            background: cycle===c ? 'var(--surface)' : 'transparent',
+            color: cycle===c ? 'var(--primary-ink)' : 'var(--text-3)',
+            boxShadow: cycle===c ? '0 1px 3px rgba(0,0,0,.08)' : 'none' }}>{lbl}</button>
+        ))}
+      </div>
+
+      {/* plan cards */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))', gap:14 }}>
+        {SUB_PLANS.map(p=>{
+          const isCurrent = curPlan===p.key;
+          const price = cycle==='yr' ? p.yr : p.mo;
+          return (
+            <div key={p.key} style={{
+              position:'relative', borderRadius:14, padding:'20px 20px 22px',
+              border:'1.5px solid '+(p.popular?'var(--primary)':'var(--border)'),
+              background: p.popular ? 'var(--primary-soft)' : 'var(--surface)' }}>
+              {p.popular && <span style={{ position:'absolute', top:-11, right:16, background:'var(--primary)', color:'#fff',
+                fontSize:11, fontWeight:700, padding:'2px 10px', borderRadius:20 }}>🔥 แนะนำ</span>}
+              <div style={{ fontWeight:800, fontSize:17 }}>{p.label}</div>
+              <div style={{ fontSize:12.5, color:'var(--text-3)', marginTop:2, minHeight:32 }}>{p.sub}</div>
+              <div style={{ margin:'10px 0 2px', display:'flex', alignItems:'baseline', gap:3 }}>
+                <span style={{ fontSize:15, fontWeight:600 }}>฿</span>
+                <span style={{ fontSize:30, fontWeight:800, lineHeight:1 }}>{price.toLocaleString()}</span>
+                <span style={{ fontSize:13, color:'var(--text-3)' }}>/เดือน</span>
+              </div>
+              <div style={{ fontSize:11.5, color:'var(--text-3)', minHeight:18 }}>
+                {cycle==='yr' ? `เรียกเก็บ ฿${p.yrTotal.toLocaleString()}/ปี` : ''}
+              </div>
+              <ul style={{ listStyle:'none', padding:0, margin:'14px 0 18px', display:'flex', flexDirection:'column', gap:8 }}>
+                {p.feats.map((f,i)=>(
+                  <li key={i} style={{ display:'flex', gap:8, fontSize:12.5, lineHeight:1.5, color:'var(--text-2)' }}>
+                    <span style={{ color:'var(--primary)', flexShrink:0, fontWeight:800 }}>✓</span>{f}
+                  </li>
+                ))}
+              </ul>
+              {isCurrent ? (
+                <button className="btn" disabled style={{ width:'100%', fontSize:13.5, padding:'10px', opacity:.7, cursor:'default' }}>
+                  ✓ แพ็กเกจปัจจุบัน
+                </button>
+              ) : (
+                <button className={"btn "+(p.popular?'btn-primary':'')} disabled={!!busy}
+                  onClick={()=>checkout(p.key)} style={{ width:'100%', fontSize:13.5, padding:'10px', fontWeight:600 }}>
+                  {busy===p.key ? 'กำลังเปิดหน้าชำระเงิน…' : (isPaid ? `เปลี่ยนเป็น ${p.label}` : `เลือก ${p.label}`)}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* enterprise / contact */}
+      <div style={{ marginTop:16, fontSize:12.5, color:'var(--text-3)', textAlign:'center' }}>
+        ต้องการหลายสาขาหรือนักเรียนไม่จำกัด? <a href="/contact.html?type=sales&plan=enterprise" target="_blank" rel="noopener"
+          style={{ color:'var(--primary-ink)', fontWeight:600 }}>ติดต่อฝ่ายขาย (ENTERPRISE)</a>
+      </div>
+    </SettingsCard>
+  );
+}
+
 function AccountSettingsSection({ showToast, go }){
   const [changingPw, setChangingPw] = useState(false);
 
@@ -661,6 +788,8 @@ function AccountSettingsSection({ showToast, go }){
 
   return (
     <>
+      {DATA._isLiveMode && <SubscriptionCard showToast={showToast}/>}
+
       <SettingsCard title="ความปลอดภัย">
         <Row
           icon="key"
@@ -709,17 +838,19 @@ function AccountSettingsSection({ showToast, go }){
           <div style={{ flex:1, minWidth:200 }}>
             <div style={{ fontWeight:600, fontSize:13.5, marginBottom:4 }}>Resend Integration</div>
             <div style={{ fontSize:12.5, color:'var(--text-3)', lineHeight:1.6 }}>
-              เมื่อตั้งค่า <code style={{ background:'var(--surface-2)', padding:'1px 5px', borderRadius:4 }}>RESEND_API_KEY</code> บน Railway
-              ระบบจะส่งอีเมลยืนยัน รีเซ็ตรหัสผ่าน และแจ้งเตือนอื่นๆ โดยอัตโนมัติ
+              {DATA._userRaw?.email_configured
+                ? 'เชื่อมต่อแล้ว — ระบบส่งอีเมลยืนยัน รีเซ็ตรหัสผ่าน และแจ้งเตือนอื่นๆ โดยอัตโนมัติ'
+                : (<>เมื่อตั้งค่า <code style={{ background:'var(--surface-2)', padding:'1px 5px', borderRadius:4 }}>RESEND_API_KEY</code> บน Railway
+                   ระบบจะส่งอีเมลยืนยัน รีเซ็ตรหัสผ่าน และแจ้งเตือนอื่นๆ โดยอัตโนมัติ</>)}
             </div>
           </div>
           <div style={{ display:'flex', alignItems:'flex-start', paddingTop:4 }}>
             <div style={{
               padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:700,
-              background: 'var(--surface-2)',
-              color: 'var(--text-3)',
+              background: DATA._userRaw?.email_configured ? '#06c75522' : 'var(--surface-2)',
+              color: DATA._userRaw?.email_configured ? '#06a046' : 'var(--text-3)',
             }}>
-              ⏳ รอตั้งค่า
+              {DATA._userRaw?.email_configured ? '✓ ใช้งานอยู่' : '⏳ รอตั้งค่า'}
             </div>
           </div>
         </div>
@@ -903,6 +1034,7 @@ function AssessmentSettingsSection({ showToast }){
   const [draft, setDraft] = useState({});   // per-subject "add criterion" text
   const [parentsOn, setParentsOn] = useState(!!DATA.SHOW_ASSESS_PARENTS);
   const [courseNoOn, setCourseNoOn] = useState(!!DATA.SHOW_COURSE_NO_PARENTS);
+  const [expiryOn, setExpiryOn] = useState(!!DATA.COURSE_EXPIRY_ENABLED);
   const [busy, setBusy] = useState(false);
   const inp = useInpStyle();
 
@@ -941,6 +1073,14 @@ function AssessmentSettingsSection({ showToast }){
     }catch(ex){ setCourseNoOn(!on); showToast(ex.message||'บันทึกไม่สำเร็จ','error'); }
   };
 
+  const toggleExpiry = async(on)=>{
+    setExpiryOn(on);
+    try{
+      if(DATA.setCourseExpiryEnabled){ await DATA.setCourseExpiryEnabled(on); }
+      else { DATA.COURSE_EXPIRY_ENABLED = on; bumpData(); }
+    }catch(ex){ setExpiryOn(!on); showToast(ex.message||'บันทึกไม่สำเร็จ','error'); }
+  };
+
   return (
     <>
       <SettingsCard title="การมองเห็นของผู้ปกครอง" sub="เลือกว่าจะให้ผู้ปกครองเห็นคะแนนพัฒนาการในหน้า parent หรือไม่">
@@ -958,6 +1098,19 @@ function AssessmentSettingsSection({ showToast }){
           <div>
             <div style={{ fontWeight:600, fontSize:14 }}>ให้ผู้ปกครองเห็น "คอร์สที่เท่าไหร่"</div>
             <div style={{ fontSize:12.5, color:'var(--text-3)' }}>{courseNoOn ? 'เปิด — แสดงรอบคอร์สรายวิชาในหน้าผู้ปกครอง' : 'ปิด — เจ้าของ/ครูเห็นเท่านั้น (ค่าเริ่มต้น)'}</div>
+          </div>
+        </label>
+      </SettingsCard>
+
+      <SettingsCard title="วันหมดอายุคอร์ส" sub="บางโรงเรียนกำหนดให้คอร์สมีอายุการใช้งาน เช่น 90 วันนับจากวันที่ซื้อ — เปิดเพื่อกำหนดอายุต่อแพ็กเกจและต่อนักเรียน">
+        <label style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
+          <input type="checkbox" checked={expiryOn} onChange={e=>toggleExpiry(e.target.checked)}
+            style={{ width:20, height:20, accentColor:'var(--primary)' }}/>
+          <div>
+            <div style={{ fontWeight:600, fontSize:14 }}>ใช้วันหมดอายุคอร์ส</div>
+            <div style={{ fontSize:12.5, color:'var(--text-3)' }}>{expiryOn
+              ? 'เปิด — ตั้ง "อายุ (วัน)" ต่อแพ็กเกจ ระบบคำนวณวันหมดอายุให้ตอนลงทะเบียน/ต่อคอร์ส และเตือนเมื่อใกล้หมด (ไม่ลบเซสชัน)'
+              : 'ปิด — คอร์สไม่มีกำหนดหมดอายุ (ค่าเริ่มต้น)'}</div>
           </div>
         </label>
       </SettingsCard>
@@ -2124,7 +2277,7 @@ function RichMenuSettingsSection({ showToast }){
 
   const rmActionFor = (b)=>{
     switch(b.dest){
-      case 'booking':  return { type:'uri', uri:bookUrl, label:(b.label||'จองคลาส').slice(0,20) };
+      case 'booking':  return { type:'postback', data:'action=booking', displayText:b.label||'จองคลาส' };
       case 'portal':   return { type:'postback', data:'action=parent_portal', displayText:b.label||'ข้อมูลของฉัน' };
       case 'packages': return { type:'postback', data:'action=packages', displayText:b.label||'คอร์สคงเหลือ' };
       case 'website':  return { type:'uri', uri:(b.url||oaUrl||'https://skooldee.com').trim(), label:(b.label||'เว็บไซต์').slice(0,20) };
@@ -2334,7 +2487,7 @@ function RichMenuSettingsSection({ showToast }){
           </button>
         </div>
         <div style={{ marginTop:12, fontSize:12.5, color:'var(--text-3)', lineHeight:1.6 }}>
-          เมื่อเผยแพร่ ระบบจะตั้งเมนูนี้เป็นค่าเริ่มต้นให้ทุกคนที่แอด OA โดยอัตโนมัติ · ปุ่ม "จองคลาส" ลิงก์ไป <code style={{ background:'var(--surface-2)', padding:'1px 5px', borderRadius:4, fontFamily:'monospace', fontSize:11.5 }}>skooldee.com/book</code> ของโรงเรียนคุณ
+          เมื่อเผยแพร่ ระบบจะตั้งเมนูนี้เป็นค่าเริ่มต้นให้ทุกคนที่แอด OA โดยอัตโนมัติ · ปุ่ม "จองคลาส" จะตอบลิงก์จองให้ตามผู้ใช้ — นักเรียนที่เชื่อม LINE แล้วได้ลิงก์ส่วนตัว (เห็นตารางเรียนประจำ + แจ้งจองชดเชยได้) ส่วนคนอื่นได้ลิงก์จองคลาสทั่วไปของโรงเรียน
         </div>
       </SettingsCard>
     </>

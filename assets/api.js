@@ -74,6 +74,11 @@
     deleteSession:     function (id)       { return req('/api/schedule/sessions/'+id,    { method:'DELETE' }); },
     sessionBookings:   function (id)       { return req('/api/schedule/sessions/'+id+'/bookings'); },
     patchBooking:      function (id, d)    { return req('/api/schedule/bookings/'+id,     { method:'PATCH', body: JSON.stringify(d) }); },
+    /* ---- Parent-proposed make-up requests (admin review) ---- */
+    makeupRequests:    function (s)        { return req('/api/schedule/makeup-requests' + (s ? '?status='+s : '')); },
+    approveMakeup:     function (id, d)    { return req('/api/schedule/makeup-requests/'+id+'/approve', { method:'POST', body: JSON.stringify(d||{}) }); },
+    rejectMakeup:      function (id, note) { return req('/api/schedule/makeup-requests/'+id+'/reject',  { method:'POST', body: JSON.stringify({ note: note || null }) }); },
+    deleteMakeup:      function (id)       { return req('/api/schedule/makeup-requests/'+id,            { method:'DELETE' }); },
     attendance: function (dt)  { return req('/api/attendance' + (dt ? '?date=' + dt : '')); },
     invoices:  function ()     { return req('/api/finance/invoices'); },
     homework:  function ()     { return req('/api/homework'); },

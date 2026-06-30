@@ -42,6 +42,41 @@ export const hhmm = (min) =>
 
 export const today = () => new Date().toISOString().slice(0, 10);
 
+// add N days to a YYYY-MM-DD date (or today if omitted) → YYYY-MM-DD. Used to turn a
+// package's validity window (valid_days) into a concrete enrollment expiry date.
+export function addDaysISO(days, from) {
+  const base = new Date(((from && /^\d{4}-\d{2}-\d{2}/.test(from)) ? from.slice(0, 10) : today()) + 'T00:00:00Z');
+  base.setUTCDate(base.getUTCDate() + (Number(days) || 0));
+  return base.toISOString().slice(0, 10);
+}
+
+// Soonest course-expiry status for a student (NON-DESTRUCTIVE — purely informational).
+// Looks at each subject's packages_json[].expires_at (only courses that still have sessions
+// left), falling back to the aggregate students.course_expires_at. Returns the soonest one so
+// the UI can warn about it. `soonDays` = how many days ahead still counts as "expiring soon".
+export function courseExpiryInfo(student, soonDays = 7) {
+  let items = [];
+  try {
+    if (student.packages_json) {
+      const a = JSON.parse(student.packages_json);
+      if (Array.isArray(a)) items = a
+        .filter((p) => p && p.expires_at && (p.sessions_remaining || 0) > 0)
+        .map((p) => ({ date: String(p.expires_at).slice(0, 10), category: p.category || null, name: p.name || null }));
+    }
+  } catch { /* malformed → ignore */ }
+  if (!items.length && student.course_expires_at && (student.sessions_remaining || 0) > 0) {
+    items = [{ date: String(student.course_expires_at).slice(0, 10), category: student.category || null, name: null }];
+  }
+  if (!items.length) return { has: false };
+  items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const soonest = items[0];
+  const daysLeft = Math.round((new Date(soonest.date + 'T00:00:00Z') - new Date(today() + 'T00:00:00Z')) / 86400000);
+  return {
+    has: true, expires_at: soonest.date, category: soonest.category, name: soonest.name,
+    expired: daysLeft < 0, days_left: daysLeft, soon: daysLeft >= 0 && daysLeft <= soonDays,
+  };
+}
+
 // Decide if a student is "near the end of a course".
 // For students enrolled in MULTIPLE subjects (packages_json), we must look at each
 // subject on its own — otherwise a finished subject is hidden behind the aggregate

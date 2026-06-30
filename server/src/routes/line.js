@@ -19,7 +19,7 @@ const r = Router();
  */
 r.post('/webhook/:schoolId', async (req, res) => {
   const sid = Number(req.params.schoolId);
-  const school = get('SELECT line_token, line_secret, line_welcome_enabled, line_welcome_message, owner_link_code FROM schools WHERE id = ?', sid);
+  const school = get('SELECT line_token, line_secret, line_welcome_enabled, line_welcome_message, owner_link_code, slug FROM schools WHERE id = ?', sid);
   if (!school) return res.sendStatus(404);
 
   // SECURITY: every webhook event MUST carry a valid LINE signature. Without a channel
@@ -80,6 +80,8 @@ r.post('/webhook/:schoolId', async (req, res) => {
         await replyPackages(school.line_token, ev.replyToken, sid, userId);
       } else if (action === 'parent_portal') {
         await replyParentPortal(school.line_token, ev.replyToken, sid, userId);
+      } else if (action === 'booking') {
+        await replyBooking(school.line_token, ev.replyToken, sid, userId, school.slug);
       }
     } else if (ev.type === 'message' && ev.message && ev.message.type === 'text') {
       const raw = String(ev.message.text || '').trim();
@@ -95,6 +97,10 @@ r.post('/webhook/:schoolId', async (req, res) => {
       }
       if (raw === 'ข้อมูลของฉัน') {
         await replyParentPortal(school.line_token, ev.replyToken, sid, userId);
+        continue;
+      }
+      if (raw === 'จองคลาส') {
+        await replyBooking(school.line_token, ev.replyToken, sid, userId, school.slug);
         continue;
       }
       // CRITICAL: only treat a message as a "link code" attempt when it actually looks
@@ -189,6 +195,28 @@ async function replyParentPortal(token, replyToken, sid, userId) {
   } else {
     await reply(token, replyToken,
       'ยังไม่พบข้อมูลในระบบค่ะ 🙏\nรบกวนติดต่อทางโรงเรียนเพื่อขอรหัสเชื่อมต่อก่อนนะคะ');
+  }
+}
+
+// Reply with a booking link. Shared by the "booking" postback and the "จองคลาส" Rich Menu
+// text button. A LINKED student's parent gets their child's PERSONAL link (token → shows the
+// recurring weekly schedule + lets them request a make-up). Anyone else (a prospect who just
+// added the OA) gets the public slug link (trials / open classes). The Rich Menu is shared by
+// every follower, so a static URL can't tell the two apart — but the postback knows the userId.
+async function replyBooking(token, replyToken, sid, userId, slug) {
+  const students = all(
+    'SELECT name, nickname, parent_token FROM students WHERE line_user_id = ? AND school_id = ? AND status != ? ORDER BY id',
+    userId, sid, 'inactive'
+  );
+  if (students.length) {
+    const lines = students.map((s) =>
+      `• น้อง${s.nickname || s.name}\nhttps://skooldee.com/book?token=${s.parent_token}`);
+    await reply(token, replyToken,
+      `🗓️ จองคลาส / เรียนชดเชย\n\nกดลิงก์เพื่อดูตารางเรียนประจำ จองคลาสเพิ่ม หรือแจ้งขอเรียนชดเชยได้เลยค่ะ\n\n${lines.join('\n\n')}\n\n(กดลิงก์เพื่อเปิดในเบราว์เซอร์)`);
+  } else {
+    const pub = slug ? `https://skooldee.com/book?school=${encodeURIComponent(slug)}` : 'https://skooldee.com';
+    await reply(token, replyToken,
+      `🗓️ จองคลาสเรียน\n\nดูคลาสที่เปิดให้จองได้ที่นี่ค่ะ\n\n${pub}\n\n(ถ้าเป็นนักเรียนปัจจุบันแต่ยังไม่ได้เชื่อมบัญชี LINE รบกวนขอ "รหัสเชื่อมต่อ" จากทางโรงเรียน เพื่อดูตารางเรียนส่วนตัวและจองเรียนชดเชยนะคะ)`);
   }
 }
 

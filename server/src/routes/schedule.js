@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import { all, get, run } from '../db.js';
 import { wrap, required, bad, hhmm } from '../util.js';
-import { maybeNotifyTeacher } from '../line-push.js';
-import { requirePage } from '../auth.js';
+import { maybeNotifyTeacher, pushToParent } from '../line-push.js';
+import { requirePage, requireFeature } from '../auth.js';
 
 const r = Router();
 
 // managing the timetable (create/move/cancel classes) needs schedule:manage
 const canManage = requirePage('schedule', 'manage');
+// publishing self-service bookable sessions is an ACADEMY+ feature
+const canBook = requireFeature('booking', 'จองคลาสออนไลน์ใช้ได้ในแผน ACADEMY ขึ้นไป — อัปเกรดเพื่อเปิดใช้งาน');
 
 const withStudents = (slot) => {
   const students = all(
@@ -202,7 +204,7 @@ r.get('/sessions', wrap((req, res) => {
 }));
 
 // POST /api/schedule/sessions — publish a bookable session
-r.post('/sessions', canManage, wrap((req, res) => {
+r.post('/sessions', canManage, canBook, wrap((req, res) => {
   const b = required(req.body, ['date', 'start_min', 'end_min']);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date)) throw bad('date must be YYYY-MM-DD');
   const kind = KINDS.includes(b.kind) ? b.kind : 'group';
@@ -281,6 +283,108 @@ r.patch('/bookings/:id', canManage, wrap((req, res) => {
   const status = req.body && req.body.status;
   if (!['booked', 'cancelled', 'attended', 'no_show'].includes(status)) throw bad('invalid status');
   run('UPDATE bookings SET status = ? WHERE id = ? AND school_id = ?', status, bk.id, req.schoolId);
+  res.json({ ok: true });
+}));
+
+// ============================================================================
+//  Make-up requests (admin side). Parents propose a make-up day/time/subject via
+//  the public booking link; an owner/admin approves (→ lands on the timetable as a
+//  schedule_exceptions 'makeup' row + notifies parent/teacher) or rejects.
+//  NOTE: registered before the '/:id' catch-all so "makeup-requests" isn't read as an id.
+// ============================================================================
+
+const THMON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const thDate = (iso) => { const p = String(iso || '').slice(0, 10).split('-'); return p.length === 3 ? `${parseInt(p[2], 10)} ${THMON[parseInt(p[1], 10) - 1]}` : iso; };
+
+const makeupRow = (id, sid) => get(
+  `SELECT m.*, s.name AS student_name, s.nickname AS student_nick, t.name AS teacher_name
+     FROM makeup_requests m
+     JOIN students s ON s.id = m.student_id
+     LEFT JOIN teachers t ON t.id = m.teacher_id
+    WHERE m.id = ? AND m.school_id = ?`, id, sid);
+
+const shapeMakeup = (m) => ({
+  ...m,
+  start: hhmm(m.start_min),
+  end: hhmm(m.end_min),
+});
+
+// GET /api/schedule/makeup-requests?status=pending — list requests (own-scoped teachers
+// don't manage these, so they see all of their school's; admins see all).
+r.get('/makeup-requests', wrap((req, res) => {
+  let rows = all(
+    `SELECT m.*, s.name AS student_name, s.nickname AS student_nick, t.name AS teacher_name
+       FROM makeup_requests m
+       JOIN students s ON s.id = m.student_id
+       LEFT JOIN teachers t ON t.id = m.teacher_id
+      WHERE m.school_id = ? ORDER BY m.created_at DESC`, req.schoolId);
+  if (req.query.status) rows = rows.filter((m) => m.status === req.query.status);
+  res.json(rows.map(shapeMakeup));
+}));
+
+// POST /api/schedule/makeup-requests/:id/approve — body { teacher_id?, note? }
+r.post('/makeup-requests/:id/approve', canManage, wrap((req, res) => {
+  const sid = req.schoolId;
+  const m = get('SELECT * FROM makeup_requests WHERE id = ? AND school_id = ?', req.params.id, sid);
+  if (!m) throw bad('ไม่พบคำขอนี้', 404);
+  if (m.status !== 'pending') throw bad('คำขอนี้ถูกพิจารณาไปแล้ว');
+  const b = req.body || {};
+  let teacherId = (b.teacher_id != null && b.teacher_id !== '') ? Number(b.teacher_id) : null;
+  if (teacherId && !get('SELECT id FROM teachers WHERE id = ? AND school_id = ?', teacherId, sid)) throw bad('teacher not found', 404);
+  const note = b.note ? String(b.note).slice(0, 500) : null;
+
+  // land the makeup on the live timetable
+  const exRes = run(
+    `INSERT INTO schedule_exceptions (school_id, slot_id, date, type, student_id, teacher_id, category, start_min, end_min, note)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    sid, null, m.date, 'makeup', m.student_id, teacherId, m.category || null,
+    m.start_min, m.end_min, 'เรียนชดเชย (อนุมัติคำขอผู้ปกครอง)');
+  const exceptionId = Number(exRes.lastInsertRowid);
+
+  run(
+    `UPDATE makeup_requests
+        SET status = 'approved', teacher_id = ?, exception_id = ?, reviewed_by = ?, reviewed_at = datetime('now'), review_note = ?
+      WHERE id = ?`,
+    teacherId, exceptionId, req.user.uid, note, m.id);
+
+  const tm = `${hhmm(m.start_min)}–${hhmm(m.end_min)} น.`;
+  // notify the assigned teacher (pref-gated) + confirm with the parent over LINE
+  if (teacherId) {
+    maybeNotifyTeacher(sid, teacherId, 't_change',
+      `🗓️ เพิ่มคาบสอนชดเชย\nวันที่ ${thDate(m.date)} เวลา ${tm}\nรบกวนเตรียมสอนด้วยนะคะ`);
+  }
+  pushToParent(sid, m.student_id,
+    `✅ คำขอเรียนชดเชยได้รับการอนุมัติแล้วค่ะ\n📅 ${thDate(m.date)} เวลา ${tm}`).catch(() => {});
+
+  res.json(shapeMakeup(makeupRow(m.id, sid)));
+}));
+
+// POST /api/schedule/makeup-requests/:id/reject — body { note? }
+r.post('/makeup-requests/:id/reject', canManage, wrap((req, res) => {
+  const sid = req.schoolId;
+  const m = get('SELECT * FROM makeup_requests WHERE id = ? AND school_id = ?', req.params.id, sid);
+  if (!m) throw bad('ไม่พบคำขอนี้', 404);
+  if (m.status !== 'pending') throw bad('คำขอนี้ถูกพิจารณาไปแล้ว');
+  const note = (req.body && req.body.note) ? String(req.body.note).slice(0, 500) : null;
+  run(
+    `UPDATE makeup_requests
+        SET status = 'rejected', reviewed_by = ?, reviewed_at = datetime('now'), review_note = ?
+      WHERE id = ?`,
+    req.user.uid, note, m.id);
+  pushToParent(sid, m.student_id,
+    `ขออภัยค่ะ คำขอเรียนชดเชย (${thDate(m.date)} ${hhmm(m.start_min)}–${hhmm(m.end_min)} น.) ยังไม่สามารถจัดให้ได้` +
+    (note ? `\nหมายเหตุ: ${note}` : '\nรบกวนติดต่อทางโรงเรียนเพื่อนัดวันใหม่นะคะ')).catch(() => {});
+  res.json(shapeMakeup(makeupRow(m.id, sid)));
+}));
+
+// DELETE /api/schedule/makeup-requests/:id — remove a request from the list. If it was
+// approved, also pull the makeup off the timetable (delete its schedule_exceptions row).
+r.delete('/makeup-requests/:id', canManage, wrap((req, res) => {
+  const sid = req.schoolId;
+  const m = get('SELECT * FROM makeup_requests WHERE id = ? AND school_id = ?', req.params.id, sid);
+  if (!m) throw bad('ไม่พบคำขอนี้', 404);
+  if (m.exception_id) run('DELETE FROM schedule_exceptions WHERE id = ? AND school_id = ?', m.exception_id, sid);
+  run('DELETE FROM makeup_requests WHERE id = ? AND school_id = ?', m.id, sid);
   res.json({ ok: true });
 }));
 

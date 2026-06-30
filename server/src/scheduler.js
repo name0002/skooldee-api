@@ -4,7 +4,8 @@
 import { all, get, run } from './db.js';
 import { pushRaw, notifyPlatformOwner, pushToParent } from './line-push.js';
 import { applyDiscount } from './routes/finance.js';
-import { nearLimitInfo } from './util.js';
+import { nearLimitInfo, courseExpiryInfo } from './util.js';
+import { planAllows } from './plans.js';
 
 const TARGET_HOUR = Number(process.env.DAILY_NOTIFY_HOUR || 7); // Asia/Bangkok local hour
 const TICK_MS = 5 * 60 * 1000; // re-check every 5 minutes
@@ -62,7 +63,7 @@ function catLabeller(catsJson) {
 
 // ---- daily jobs: teacher schedule + birthday greetings ----
 async function runDaily(now) {
-  const schools = all("SELECT id, line_token, notify_prefs, categories_json FROM schools WHERE line_token IS NOT NULL AND line_token != ''");
+  const schools = all("SELECT id, line_token, notify_prefs, categories_json, course_expiry_enabled FROM schools WHERE line_token IS NOT NULL AND line_token != ''");
   for (const school of schools) {
     const p = prefs(school);
 
@@ -140,6 +141,29 @@ async function runDaily(now) {
           quickReply);
       }
     }
+
+    // 3b) course-expiry reminder (opt-in, only when the school uses course expiry).
+    // Bounded so we never spam: fire only when the soonest course expires in exactly
+    // `lead` days (default 7) or today (0). Non-destructive — sessions are never touched.
+    if (p.course_expiry && school.course_expiry_enabled) {
+      const lead = Number(p.course_expiry_lead || 7);
+      const labelOf = catLabeller(school.categories_json);
+      const kids = all(
+        `SELECT id, name, nickname, category, packages_json, course_expires_at, sessions_remaining, line_user_id
+           FROM students WHERE school_id = ? AND status = 'active'
+            AND line_user_id IS NOT NULL AND line_user_id != ''`, school.id);
+      for (const s of kids) {
+        const ce = courseExpiryInfo(s, lead);
+        if (!ce.has) continue;
+        if (ce.days_left !== lead && ce.days_left !== 0) continue; // only the lead-day and expiry-day marks
+        const subj = ce.category ? `คอร์ส${labelOf(ce.category)}` : 'คอร์ส';
+        const when = ce.days_left === 0
+          ? `${subj}ของน้อง${s.nickname || s.name} หมดอายุวันนี้แล้วค่ะ`
+          : `${subj}ของน้อง${s.nickname || s.name} จะหมดอายุในอีก ${lead} วัน (${ce.expires_at})`;
+        await pushRaw(school.line_token, s.line_user_id,
+          `⏳ ${when}\nเหลืออีก ${s.sessions_remaining || 0} ครั้ง — รบกวนติดต่อโรงเรียนเพื่อต่อคอร์สก่อนหมดอายุนะคะ 🙏`);
+      }
+    }
   }
 
   // 4) platform owner: ping when a school's trial expires tomorrow (regardless of
@@ -165,8 +189,9 @@ async function runDaily(now) {
 // ฿0 invoice (a 100%-discount/scholarship student) is skipped.
 export async function runAutoBilling() {
   const APP_URL = process.env.APP_URL || 'https://skooldee.com';
-  const schools = all('SELECT id, near_limit_threshold FROM schools');
+  const schools = all('SELECT id, near_limit_threshold, plan, plan_expires FROM schools');
   for (const school of schools) {
+    if (!planAllows(school, 'autobill')) continue; // auto-billing is an ACADEMY+ feature
     const threshold = school.near_limit_threshold || 2;
     const students = all(
       `SELECT * FROM students WHERE school_id = ? AND billing_enabled = 1 AND status = 'active'

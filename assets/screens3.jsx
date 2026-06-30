@@ -10,6 +10,7 @@ function Attendance(){
   const [att, setAtt]           = useState(()=> (DATA.loadAttendance()[todayKey]) || {});
   const [histData, setHistData] = useState(null);   // {summary, records} for past dates
   const [histLoading, setHistLoading] = useState(false);
+  const [hwStudent, setHwStudent] = useState(null);   // student to assign homework to (opens HomeworkAssign)
   const [toast, showToast] = useToast();
 
   // today's effective classes = recurring (minus cancelled today) + makeup classes for today
@@ -228,6 +229,8 @@ function Attendance(){
                       style={ st===k ? { background:v.color, color:"#fff", borderColor:v.color } : null }>{v.label}</button>
                   ))}
                 </div>
+                {stu && <button className="icon-btn" title="ให้การบ้าน" onClick={()=>setHwStudent(stu)}
+                  style={{ flexShrink:0, color:"var(--primary)" }}><Icon n="book" size={17}/></button>}
               </div>
             );
           })}
@@ -263,6 +266,10 @@ function Attendance(){
           })}
         </div>
       )}
+      {hwStudent && window.HomeworkAssign && <window.HomeworkAssign
+        presetSids={[hwStudent.id]}
+        onClose={()=>setHwStudent(null)}
+        onSaved={(notify,n)=>{ setHwStudent(null); showToast(notify?"มอบหมาย + แจ้ง LINE แล้ว ✓":"บันทึกการบ้านแล้ว ✓"); }}/>}
       {toast}
     </div>
   );

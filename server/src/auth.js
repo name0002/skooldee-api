@@ -2,6 +2,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { get, all } from './db.js';
+import { planAllows } from './plans.js';
 
 const SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
 const EXPIRES = process.env.JWT_EXPIRES || '7d';
@@ -135,6 +136,19 @@ export function requirePage(page, level = 'view') {
   return (req, res, next) => {
     if (!req.perms || !pageAllows(req.perms, page, level)) {
       return res.status(403).json({ error: 'forbidden' });
+    }
+    next();
+  };
+}
+
+// Gate a route by subscription plan feature flag (see plans.js). Returns 402 when the
+// school's current plan doesn't include the feature, so the client can prompt an upgrade.
+// Use on the write/create routes that constitute "using" the feature.
+export function requireFeature(feature, message) {
+  return (req, res, next) => {
+    const sch = req.schoolId ? get('SELECT plan, plan_expires FROM schools WHERE id = ?', req.schoolId) : null;
+    if (!planAllows(sch, feature)) {
+      return res.status(402).json({ error: message || 'ฟีเจอร์นี้ต้องอัปเกรดแพ็กเกจเพื่อเปิดใช้งาน' });
     }
     next();
   };

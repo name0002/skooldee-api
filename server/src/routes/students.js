@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
 import { all, get, run, tierOf } from '../db.js';
-import { wrap, required, bad, nearLimitInfo } from '../util.js';
+import { wrap, required, bad, nearLimitInfo, courseExpiryInfo, addDaysISO } from '../util.js';
 import { requirePage, ownStudentIds } from '../auth.js';
 import { effectivePlan, planAllows } from '../plans.js';
 
@@ -28,32 +28,46 @@ const ownsStudent = (req, id) => !req.scopeOwn || ownStudentIds(req.schoolId, re
 const codeFor = (name) =>
   'MARI-' + String(name || 'XX').replace(/\s/g, '').slice(0, 2).toUpperCase() + Math.floor(100 + Math.random() * 900);
 
-// normalise a multi-package enrollment list → { json, total, remaining, firstPkg, firstCat }
-function buildEnrollments(b) {
+// normalise a multi-package enrollment list → { json, total, remaining, firstPkg, firstCat, expires }
+// `expires` is the soonest enrollment expiry (mirrored onto students.course_expires_at). Each
+// entry's expires_at: the admin's explicit value wins; otherwise it's derived from the package's
+// validity window (today + valid_days). Packages without valid_days simply carry no expiry.
+function buildEnrollments(b, sid) {
   if (!Array.isArray(b.packages) || !b.packages.length) return null;
   const enr = b.packages
     .filter((p) => p && (p.sessions_total != null || p.package_id))
-    .map((p) => ({
-      category: p.category || null,
-      package_id: p.package_id || null,
-      name: p.name || null,
-      sessions_total: Math.max(0, parseInt(p.sessions_total) || 0),
-      sessions_remaining: Math.max(0, parseInt(p.sessions_remaining != null ? p.sessions_remaining : p.sessions_total) || 0),
-    }));
+    .map((p) => {
+      const e = {
+        category: p.category || null,
+        package_id: p.package_id || null,
+        name: p.name || null,
+        sessions_total: Math.max(0, parseInt(p.sessions_total) || 0),
+        sessions_remaining: Math.max(0, parseInt(p.sessions_remaining != null ? p.sessions_remaining : p.sessions_total) || 0),
+      };
+      let exp = (p.expires_at && /^\d{4}-\d{2}-\d{2}/.test(p.expires_at)) ? String(p.expires_at).slice(0, 10) : null;
+      if (!exp && sid && e.package_id) {
+        const pk = get('SELECT valid_days FROM packages WHERE id = ? AND school_id = ?', e.package_id, sid);
+        if (pk && pk.valid_days > 0) exp = addDaysISO(pk.valid_days);
+      }
+      if (exp) e.expires_at = exp;
+      return e;
+    });
   if (!enr.length) return null;
+  const expDates = enr.map((e) => e.expires_at).filter(Boolean).sort();
   return {
     json: JSON.stringify(enr),
     total: enr.reduce((a, p) => a + p.sessions_total, 0),
     remaining: enr.reduce((a, p) => a + p.sessions_remaining, 0),
     firstPkg: enr[0].package_id,
     firstCat: enr[0].category,
+    expires: expDates[0] || null,
   };
 }
 
 // shared insert used by POST / and POST /bulk
 function insertStudent(sid, b) {
   const cats = Array.isArray(b.categories) ? b.categories.filter(Boolean) : [];
-  const enr = buildEnrollments(b);
+  const enr = buildEnrollments(b, sid);
   const primaryCat = cats[0] || (enr && enr.firstCat) || b.category || null;
   const categoriesJson = cats.length ? JSON.stringify(cats) : null;
   // when multiple packages given, the per-student totals are the aggregate sum
@@ -64,13 +78,14 @@ function insertStudent(sid, b) {
   if (packageId && !get('SELECT id FROM packages WHERE id = ? AND school_id = ?', packageId, sid)) packageId = null;
   const result = run(
     `INSERT INTO students (school_id, name, nickname, age, birthday, parent_name, parent_phone, line_id, category, categories_json,
-       teacher_id, package_id, sessions_remaining, sessions_total, balance_due, status, referral_code, parent_token, goal, email, packages_json, recipient_type, honorific)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       teacher_id, package_id, sessions_remaining, sessions_total, balance_due, status, referral_code, parent_token, goal, email, packages_json, recipient_type, honorific, course_expires_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     sid, b.name, b.nickname || null, b.age || null, b.birthday || null, b.parent_name || null, b.parent_phone || null,
     b.line_id || null, primaryCat, categoriesJson, b.teacher_id || null, packageId,
     sessRemain, sessTotal, b.balance_due || 0,
     b.status || 'active', codeFor(b.nickname || b.name), crypto.randomBytes(8).toString('hex'),
-    b.goal || null, b.email || null, enr ? enr.json : null, b.recipient_type || null, b.honorific || null
+    b.goal || null, b.email || null, enr ? enr.json : null, b.recipient_type || null, b.honorific || null,
+    enr ? enr.expires : null
   );
   return get('SELECT * FROM students WHERE id = ? AND school_id = ?', Number(result.lastInsertRowid), sid);
 }
@@ -93,7 +108,7 @@ r.post('/bulk', wrap((req, res) => {
 // GET /api/students?near_limit=1&q=&category=
 r.get('/', wrap((req, res) => {
   const sid = req.schoolId;
-  const sch = get('SELECT near_limit_threshold FROM schools WHERE id = ?', sid);
+  const sch = get('SELECT near_limit_threshold, course_expiry_enabled FROM schools WHERE id = ?', sid);
   const rows = all(
     `SELECT s.*, t.name AS teacher_name, p.name AS package_name
        FROM students s
@@ -110,7 +125,16 @@ r.get('/', wrap((req, res) => {
   }
   let list = rows.map((s) => {
     const nl = nearLimitInfo(s, sch.near_limit_threshold);
-    return { ...s, tier: tierOf(s.points), near_limit: nl.near, near_limit_subject: nl.perSubject ? { remaining: nl.remaining, category: nl.category, name: nl.name } : null };
+    // course-expiry status is informational and only computed when the school opted in
+    const ce = sch.course_expiry_enabled ? courseExpiryInfo(s) : { has: false };
+    return {
+      ...s, tier: tierOf(s.points), near_limit: nl.near,
+      near_limit_subject: nl.perSubject ? { remaining: nl.remaining, category: nl.category, name: nl.name } : null,
+      course_expired: ce.has ? ce.expired : false,
+      course_expires_soon: ce.has ? ce.soon : false,
+      course_expiry_days: ce.has ? ce.days_left : null,
+      course_expiry_subject: ce.has ? { category: ce.category, name: ce.name } : null,
+    };
   });
 
   // teachers scoped to 'own' only see their own students
@@ -185,14 +209,16 @@ r.patch('/:id', canManage, wrap((req, res) => {
   }
   // multi-package: packages[] → packages_json + sync aggregate session totals
   if ('packages' in req.body) {
-    const enr = buildEnrollments(req.body);
+    const enr = buildEnrollments(req.body, req.schoolId);
     if (enr) {
       sets.push('packages_json = ?'); vals.push(enr.json);
+      sets.push('course_expires_at = ?'); vals.push(enr.expires); // soonest enrollment expiry (null if none)
       if (!('sessions_total' in req.body)) { sets.push('sessions_total = ?'); vals.push(enr.total); }
       if (!('sessions_remaining' in req.body)) { sets.push('sessions_remaining = ?'); vals.push(enr.remaining); }
       if (!('package_id' in req.body) && enr.firstPkg) { sets.push('package_id = ?'); vals.push(enr.firstPkg); }
     } else {
       sets.push('packages_json = ?'); vals.push(null);
+      sets.push('course_expires_at = ?'); vals.push(null);
       // packages cleared — don't leave stale totals from the removed packages behind
       if (!('sessions_total' in req.body)) { sets.push('sessions_total = ?'); vals.push(0); }
       if (!('sessions_remaining' in req.body)) { sets.push('sessions_remaining = ?'); vals.push(0); }

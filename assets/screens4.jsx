@@ -95,9 +95,10 @@ function Homework(){
 // teacher label helper: show the teacher only when one is actually set (drop the "(-)" noise)
 function hwTeacherLabel(s){ const t=s&&s.teacher; return (t && t!=='-' && String(t).trim()) ? String(t).trim() : ''; }
 
-function HomeworkAssign({ onClose, onSaved }){
+function HomeworkAssign({ onClose, onSaved, presetSids }){
   // multi-select: a Set of student ids that will all receive this homework
-  const [sids, setSids] = useState(()=> new Set());
+  // presetSids pre-selects students (e.g. when opened from the attendance tab right after class)
+  const [sids, setSids] = useState(()=> new Set(presetSids||[]));
   const [q, setQ] = useState("");                 // student search box
   const [title, setTitle] = useState("");
   const [detail, setDetail] = useState("");
@@ -228,6 +229,7 @@ function HomeworkAssign({ onClose, onSaved }){
   );
 }
 window.Homework = Homework;
+window.HomeworkAssign = HomeworkAssign;
 
 /* ============ ระบบแนะนำเพื่อน (Referrals) ============ */
 function Referrals(){

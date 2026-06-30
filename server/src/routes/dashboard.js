@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { all, get } from '../db.js';
 import { wrap, today, hhmm, nearLimitInfo } from '../util.js';
-import { ownStudentIds, pageAllows } from '../auth.js';
+import { ownStudentIds, pageAllows, requireFeature } from '../auth.js';
 
 const r = Router();
 
@@ -103,7 +103,7 @@ function forecastSeries(values) {
 
 // GET /api/dashboard/analytics?months=12&horizon=3
 // Revenue (finance-gated) + new-student counts per month, each with a forward forecast.
-r.get('/analytics', wrap((req, res) => {
+r.get('/analytics', requireFeature('reports', 'รายงาน & พยากรณ์รายได้ใช้ได้ในแผน ACADEMY ขึ้นไป — อัปเกรดเพื่อเปิดใช้งาน'), wrap((req, res) => {
   const sid = req.schoolId;
   if (!pageAllows(req.perms, 'reports', 'view')) throw Object.assign(new Error('forbidden'), { status: 403 });
 

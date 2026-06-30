@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { all, get, run } from '../db.js';
-import { wrap, required, bad, today } from '../util.js';
+import { wrap, required, bad, today, addDaysISO } from '../util.js';
 import { maybeNotify } from '../line-push.js';
 
 const r = Router();
@@ -59,10 +59,18 @@ function applyRenewal(student, pkg, category) {
   entry.sessions_total = entry.sessions_remaining;       // fresh course → bar shows full
   entry.package_id = pkg.id;
   entry.name = pkg.name;
+  // a fresh course resets the expiry clock: a package with a validity window expires N days
+  // from today; one without clears any old expiry (this renewal no longer expires).
+  if (pkg.valid_days > 0) entry.expires_at = addDaysISO(pkg.valid_days);
+  else delete entry.expires_at;
 
   const aggRemaining = pj.reduce((a, p) => a + (p.sessions_remaining || 0), 0);
   const aggTotal = pj.reduce((a, p) => a + (p.sessions_total || 0), 0);
-  return { packages_json: JSON.stringify(pj), sessions_remaining: aggRemaining, sessions_total: aggTotal, round: entry.round };
+  const expDates = pj.map((p) => p.expires_at).filter(Boolean).sort();
+  return {
+    packages_json: JSON.stringify(pj), sessions_remaining: aggRemaining, sessions_total: aggTotal,
+    course_expires_at: expDates[0] || null, round: entry.round,
+  };
 }
 
 // compute net amount from a subtotal + discount (returns { subtotal, dtype, dval, amount })
@@ -98,8 +106,8 @@ r.post('/invoices', wrap((req, res) => {
       const pkg = get('SELECT * FROM packages WHERE id = ? AND school_id = ?', b.package_id, req.schoolId);
       if (pkg) {
         const up = applyRenewal(student, pkg, category);
-        run('UPDATE students SET sessions_remaining = ?, sessions_total = ?, packages_json = ? WHERE id = ? AND school_id = ?',
-          up.sessions_remaining, up.sessions_total, up.packages_json, student.id, req.schoolId);
+        run('UPDATE students SET sessions_remaining = ?, sessions_total = ?, packages_json = ?, course_expires_at = ? WHERE id = ? AND school_id = ?',
+          up.sessions_remaining, up.sessions_total, up.packages_json, up.course_expires_at, student.id, req.schoolId);
       }
     }
   } else {
@@ -159,8 +167,8 @@ r.post('/invoices/:id/approve-slip', wrap((req, res) => {
     const student = get('SELECT * FROM students WHERE id = ? AND school_id = ?', inv.student_id, req.schoolId);
     if (pkg && student) {
       const up = applyRenewal(student, pkg, inv.category);
-      run('UPDATE students SET sessions_remaining = ?, sessions_total = ?, packages_json = ? WHERE id = ? AND school_id = ?',
-        up.sessions_remaining, up.sessions_total, up.packages_json, inv.student_id, req.schoolId);
+      run('UPDATE students SET sessions_remaining = ?, sessions_total = ?, packages_json = ?, course_expires_at = ? WHERE id = ? AND school_id = ?',
+        up.sessions_remaining, up.sessions_total, up.packages_json, up.course_expires_at, inv.student_id, req.schoolId);
     }
   }
   res.json(get('SELECT * FROM invoices WHERE id = ?', inv.id));
@@ -189,8 +197,8 @@ r.post('/invoices/:id/pay', wrap((req, res) => {
     const student = get('SELECT * FROM students WHERE id = ? AND school_id = ?', inv.student_id, req.schoolId);
     if (pkg && student) {
       const up = applyRenewal(student, pkg, inv.category);
-      run('UPDATE students SET sessions_remaining = ?, sessions_total = ?, packages_json = ? WHERE id = ? AND school_id = ?',
-        up.sessions_remaining, up.sessions_total, up.packages_json, inv.student_id, req.schoolId);
+      run('UPDATE students SET sessions_remaining = ?, sessions_total = ?, packages_json = ?, course_expires_at = ? WHERE id = ? AND school_id = ?',
+        up.sessions_remaining, up.sessions_total, up.packages_json, up.course_expires_at, inv.student_id, req.schoolId);
     }
   }
   res.json(get('SELECT * FROM invoices WHERE id = ?', inv.id));

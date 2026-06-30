@@ -341,6 +341,12 @@ function Schedule(){
   const [eventsOpen, setEventsOpen] = useState(false); // events & holidays manager
   const [sessionsOpen, setSessionsOpen] = useState(false); // self-service booking manager
   const [leaveOpen, setLeaveOpen] = useState(false); // teacher leave-request drawer
+  const [makeupReqOpen, setMakeupReqOpen] = useState(()=> (DATA.MAKEUPS_PENDING||[]).length>0); // parent makeup-request panel
+  const [pendingMakeups, setPendingMakeups] = useState(()=> (DATA.MAKEUPS_PENDING||[]).length);
+  const refreshMakeupCount = async()=>{
+    if(!(DATA._isLiveMode && window.API && window.API.makeupRequests)) return;
+    try{ const p = await window.API.makeupRequests('pending'); DATA.MAKEUPS_PENDING = p||[]; setPendingMakeups((p||[]).length); }catch{}
+  };
   const [viewMode, setViewMode] = useState("day"); // "day" = columns are weekdays · "room" = columns are rooms
   const [roomDay, setRoomDay] = useState(()=> typeof DATA._todayDow==='number' ? DATA._todayDow : (new Date().getDay()+6)%7);
 
@@ -499,8 +505,16 @@ function Schedule(){
           </div>
           <button className="btn btn-ghost" onClick={()=>setLeaveOpen(true)} title="แจ้งลา / บันทึกการลาของครู">🌴 <span className="hide-mobile">แจ้งลา</span></button>
           <button className="btn btn-ghost" onClick={()=>setMakeupOpen(true)} title="เพิ่มคาบเรียนชดเชยครั้งเดียว"><Icon n="plus" size={16}/> ชดเชย</button>
+          {DATA._isLiveMode && (
+            <button className="btn btn-ghost" onClick={()=>setMakeupReqOpen(v=>!v)} title="คำขอเรียนชดเชยจากผู้ปกครอง"
+              style={ pendingMakeups>0 ? { background:'#0ea5e9', color:'#fff', border:'none', position:'relative' } : { position:'relative' } }>
+              🔄 <span className="hide-mobile">คำขอชดเชย</span>{pendingMakeups>0 && <span className="nav-badge" style={{ background:'#fff', color:'#0ea5e9', top:-6, right:-6 }}>{pendingMakeups}</span>}
+            </button>
+          )}
           <button className="btn btn-ghost" onClick={()=>setEventsOpen(true)} title="เพิ่มอีเว้นท์หรือวันหยุดของโรงเรียน">🎉 <span className="hide-mobile">อีเว้นท์/วันหยุด</span></button>
-          {DATA._isLiveMode && <button className="btn btn-ghost" onClick={()=>setSessionsOpen(true)} title="เปิดคลาสให้ผู้ปกครอง/นักเรียนจองออนไลน์เอง">📅 <span className="hide-mobile">จองออนไลน์</span></button>}
+          {DATA._isLiveMode && (planHas('booking')
+            ? <button className="btn btn-ghost" onClick={()=>setSessionsOpen(true)} title="เปิดคลาสให้ผู้ปกครอง/นักเรียนจองออนไลน์เอง">📅 <span className="hide-mobile">จองออนไลน์</span></button>
+            : <button className="btn btn-ghost" onClick={()=>showToast('จองคลาสออนไลน์ใช้ได้ในแผน ACADEMY ขึ้นไป — อัปเกรดเพื่อเปิดใช้งาน')} title="ฟีเจอร์ ACADEMY ขึ้นไป">📅 <span className="hide-mobile">จองออนไลน์</span> <span style={{ fontSize:9, fontWeight:800, color:'var(--accent-ink,#B45309)', background:'var(--accent-soft,#FEF3C7)', padding:'1px 6px', borderRadius:10, marginLeft:2 }}>ACADEMY</span></button>)}
           <button className="btn btn-primary" onClick={()=>setBooking({})}><Icon n="plus" size={18}/> จองคาบเรียน</button>
         </div>
       </div>
@@ -514,6 +528,10 @@ function Schedule(){
           </button>
         ))}
       </div>
+
+      {makeupReqOpen && DATA._isLiveMode && window.API && window.API.makeupRequests && (
+        <MakeupRequestsPanel showToast={showToast} onClose={()=>setMakeupReqOpen(false)} onChange={refreshMakeupCount}/>
+      )}
 
       {viewMode==="day" && (
       <div className="card" style={{ overflow:"hidden" }}>

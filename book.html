@@ -89,6 +89,26 @@
   .mstatus.attended{ background:#dcfce7; color:#15803d; }
   .mstatus.no_show{ background:#fee2e2; color:#991b1b; }
   .mstatus.cancelled{ background:#f1f3f2; color:var(--ink-3); }
+  .mstatus.pending{ background:var(--orange-soft); color:#b45309; }
+  .mstatus.approved{ background:#dcfce7; color:#15803d; }
+  .mstatus.rejected{ background:#fee2e2; color:#991b1b; }
+
+  /* recurring weekly classes */
+  .wk-card{ padding:6px 0; }
+  .wk-row{ display:flex; align-items:center; gap:12px; padding:11px 18px; border-bottom:1px solid var(--line); }
+  .wk-row:last-child{ border-bottom:none; }
+  .wk-day{ flex:0 0 auto; min-width:62px; text-align:center; background:var(--teal-soft); color:var(--teal-dk);
+    font-size:13px; font-weight:700; padding:6px 4px; border-radius:10px; }
+  .wk-info{ flex:1; min-width:0; }
+  .wk-time{ font-size:14px; font-weight:600; }
+  .wk-sub{ font-size:12.5px; color:var(--ink-2); margin-top:2px; }
+
+  /* makeup request form */
+  .mk-form label{ display:block; font-size:12.5px; font-weight:600; margin:8px 0 5px; color:var(--ink-2); }
+  .mk-form select{ width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:var(--radius-sm);
+    font-family:inherit; font-size:15px; outline:none; background:#fff; margin-bottom:0; }
+  .mk-form input{ margin-bottom:0; }
+  .mk-form select:focus{ border-color:var(--teal); }
   .btn-outline{ display:inline-block; width:100%; margin-top:10px; padding:10px; background:transparent;
     color:#b91c1c; font-family:inherit; font-size:13.5px; font-weight:700; border:1.5px solid #fca5a5; border-radius:var(--radius-sm); cursor:pointer; }
   .btn-outline:hover{ background:#fef2f2; }
@@ -234,6 +254,98 @@ function reloadSessions(){
   fetch(url).then(function(r){ return r.json(); }).then(render).catch(function(){});
 }
 
+// ---- recurring weekly classes + make-up requests (token / existing student only) ----
+function val(id){ var el=document.getElementById(id); return el?String(el.value||'').trim():''; }
+function timeToMin(s){ var p=String(s||'').split(':'); return p.length>=2 ? (parseInt(p[0],10)*60+parseInt(p[1],10)) : NaN; }
+
+function weeklyCard(schedule){
+  if(!schedule || !schedule.length) return '';
+  var rows = schedule.map(function(s){
+    var sub = s.category_label || s.title || '';
+    return '<div class="wk-row">'
+      + '<span class="wk-day">'+esc(s.day)+'</span>'
+      + '<div class="wk-info">'
+      + '<div class="wk-time">🕐 '+esc(s.start)+'–'+esc(s.end)+' น.</div>'
+      + (sub || s.teacher ? '<div class="wk-sub">'+esc(sub)+(s.teacher?(sub?' · ':'')+'👩‍🏫 '+esc(s.teacher):'')+'</div>' : '')
+      + '</div></div>';
+  }).join('');
+  return '<div class="sec-title">📅 คลาสประจำสัปดาห์ของฉัน</div><div class="scard wk-card">'+rows+'</div>';
+}
+
+function makeupStatusLabel(st){ return {pending:'รออนุมัติ', approved:'อนุมัติแล้ว', rejected:'ไม่อนุมัติ', cancelled:'ยกเลิกแล้ว'}[st]||st; }
+function makeupReqCard(m){
+  var canCancel = m.status==='pending';
+  return '<div class="mcard" id="mkcard-'+m.id+'">'
+    + '<div class="mcard-top"><span class="mcard-title">'+esc(m.category_label||'เรียนชดเชย')+'</span>'
+    + '<span class="mstatus '+esc(m.status)+'">'+esc(makeupStatusLabel(m.status))+'</span></div>'
+    + '<div class="mcard-meta">📅 '+esc(m.day)+' '+fmtDate(m.date)+' · 🕐 '+esc(m.start)+'–'+esc(m.end)+' น.</div>'
+    + (m.status==='rejected' && m.review_note ? '<div class="mcard-meta" style="color:#b91c1c">หมายเหตุ: '+esc(m.review_note)+'</div>' : '')
+    + '<div class="err" id="mkerr-'+m.id+'"></div>'
+    + (canCancel ? '<button class="btn-outline" onclick="cancelMakeup('+m.id+')">ยกเลิกคำขอนี้</button>' : '')
+    + '</div>';
+}
+
+// the student-only block: weekly schedule + "request a makeup" button + my makeup requests
+function studentBlock(d){
+  if(!d || !d.student) return '';
+  var reqs = d.makeup_requests || [];
+  var reqHtml = reqs.length
+    ? '<div class="sec-title">คำขอเรียนชดเชยของฉัน</div>' + reqs.map(makeupReqCard).join('')
+    : '';
+  return weeklyCard(d.schedule)
+    + '<div class="sec-title">เรียนชดเชย</div>'
+    + '<div style="margin:0 14px 4px"><button class="btn" id="makeup-open-btn" onclick="openMakeupForm()">📌 แจ้งจองวันชดเชย</button></div>'
+    + '<div id="makeup-form-wrap"></div>'
+    + reqHtml;
+}
+
+function openMakeupForm(){
+  var d = DATA || {};
+  var subjOpts = (d.subjects||[]).map(function(s){ return '<option value="'+esc(s.key||'')+'">'+esc(s.label)+'</option>'; }).join('');
+  var wrap = document.getElementById('makeup-form-wrap');
+  if(!wrap) return;
+  wrap.innerHTML = '<div class="pf-inline mk-form">'
+    + (subjOpts ? '<label>วิชา</label><select id="mk-subj">'+subjOpts+'</select>' : '')
+    + '<label>วันที่ต้องการเรียนชดเชย</label><input id="mk-date" type="date" min="'+todayStr()+'"/>'
+    + '<div style="display:flex;gap:10px">'
+    +   '<div style="flex:1"><label>เวลาเริ่ม</label><input id="mk-start" type="time"/></div>'
+    +   '<div style="flex:1"><label>ถึงเวลา</label><input id="mk-end" type="time"/></div>'
+    + '</div>'
+    + '<label>หมายเหตุ (เช่น ขาดเรียนคลาสวันไหน)</label><input id="mk-reason" placeholder="ไม่บังคับ" maxlength="300"/>'
+    + '<div class="err" id="mk-err"></div>'
+    + '<button class="btn" onclick="submitMakeup()">ส่งคำขอ ✅</button>'
+    + '<button class="btn-outline" style="color:var(--ink-2);border-color:var(--line)" onclick="closeMakeupForm()">ยกเลิก</button>'
+    + '</div>';
+  var btn = document.getElementById('makeup-open-btn'); if(btn) btn.style.display='none';
+}
+function closeMakeupForm(){
+  var wrap = document.getElementById('makeup-form-wrap'); if(wrap) wrap.innerHTML='';
+  var btn = document.getElementById('makeup-open-btn'); if(btn) btn.style.display='';
+}
+function submitMakeup(){
+  var err = document.getElementById('mk-err');
+  function fail(m){ if(err){ err.textContent=m; err.style.display='block'; } }
+  var date=val('mk-date'), start=val('mk-start'), end=val('mk-end');
+  if(!date) return fail('กรุณาเลือกวันที่');
+  if(!start || !end) return fail('กรุณาเลือกเวลาเริ่มและเวลาสิ้นสุด');
+  var sMin=timeToMin(start), eMin=timeToMin(end);
+  if(isNaN(sMin)||isNaN(eMin)||eMin<=sMin) return fail('เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม');
+  var body={ token:TOKEN, date:date, start_min:sMin, end_min:eMin, category:val('mk-subj')||null, reason:val('mk-reason')||null };
+  fetch(API_BASE+'/api/public/book/makeup-request',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+    .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||'ส่งคำขอไม่สำเร็จ'); return j; }); })
+    .then(function(){ reloadSessions(); window.scrollTo(0,0); })
+    .catch(function(e){ fail(e.message||'เกิดข้อผิดพลาด'); });
+}
+function cancelMakeup(id){
+  if(!confirm('ยกเลิกคำขอเรียนชดเชยนี้?')) return;
+  fetch(API_BASE+'/api/public/book/makeup-request/cancel',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ token:TOKEN, request_id:id }) })
+    .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||'ยกเลิกไม่สำเร็จ'); return j; }); })
+    .then(function(){ reloadSessions(); })
+    .catch(function(e){ var el=document.getElementById('mkerr-'+id); if(el){ el.textContent=e.message; el.style.display='block'; } });
+}
+window.openMakeupForm=openMakeupForm; window.closeMakeupForm=closeMakeupForm;
+window.submitMakeup=submitMakeup; window.cancelMakeup=cancelMakeup;
+
 function sessionCard(s){
   var full = s.full || s.seats_left<=0;
   var seatCls = full?'none':(s.seats_left<=3?'low':'ok');
@@ -265,7 +377,10 @@ function render(d){
   if(!d.sessions || !d.sessions.length){
     root(hdr(d)
       +'<div id="mine-wrap"></div>'
-      +'<div class="state"><div class="big">🗓️</div><h2>ยังไม่มีคลาสให้จอง</h2><p>ขณะนี้ยังไม่มีคลาสที่เปิดให้จอง<br/>กรุณากลับมาตรวจสอบใหม่ภายหลังค่ะ</p></div>'
+      + studentBlock(d)
+      + (d.student
+          ? '' // an existing student still has their schedule + makeup section above
+          : '<div class="state"><div class="big">🗓️</div><h2>ยังไม่มีคลาสให้จอง</h2><p>ขณะนี้ยังไม่มีคลาสที่เปิดให้จอง<br/>กรุณากลับมาตรวจสอบใหม่ภายหลังค่ะ</p></div>')
       +'<div class="foot">ขับเคลื่อนโดย <a href="https://skooldee.com">skooldee</a></div>');
     loadMine();
     return;
@@ -273,6 +388,7 @@ function render(d){
   var cards = d.sessions.map(sessionCard).join('');
   root(hdr(d)
     +'<div id="mine-wrap"></div>'
+    + studentBlock(d)
     +'<div class="sec-title">คลาสที่เปิดให้จอง ('+d.sessions.length+')</div>'
     + cards
     +'<div class="foot">ขับเคลื่อนโดย <a href="https://skooldee.com">skooldee</a></div>');

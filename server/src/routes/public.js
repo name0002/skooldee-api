@@ -439,7 +439,29 @@ function publicSession(s) {
   };
 }
 
-// GET /api/public/book?token=  OR  ?slug=  → school info + open future sessions you can book
+// default subject labels (mirrors the other public endpoints) — used to label the
+// recurring schedule + makeup-request subject picker on the parent booking page.
+const CAT_LABELS = {
+  piano: 'เปียโน', guitar: 'กีตาร์', singing: 'ร้องเพลง', sing: 'ร้องเพลง',
+  dance: 'เต้น', art: 'ศิลปะ', drums: 'กลอง', violin: 'ไวโอลิน',
+  english: 'ภาษาอังกฤษ', math: 'คณิตศาสตร์', science: 'วิทยาศาสตร์', other: 'อื่นๆ',
+};
+// resolve a category key → human label using the school's own list first, then defaults
+function catLabeller(school) {
+  const map = {};
+  try {
+    if (school && school.categories_json) {
+      const raw = JSON.parse(school.categories_json);
+      if (Array.isArray(raw)) raw.forEach((c) => { if (c.key) map[c.key] = c.label || c.key; });
+    }
+  } catch { /* ignore malformed json */ }
+  return (key) => (key ? (map[key] || CAT_LABELS[key] || key) : null);
+}
+
+// GET /api/public/book?token=  OR  ?slug=  → school info + open future sessions you can book.
+// For an existing student (token) the payload also carries their recurring weekly classes
+// and their make-up requests, so the parent page can show the regular schedule + let them
+// propose a make-up day.
 r.get('/book', wrap((req, res) => {
   const { school, student } = resolveBooker(req.query.token, req.query.slug);
   const visible = student ? ['existing', 'both'] : ['public', 'both'];
@@ -450,13 +472,113 @@ r.get('/book', wrap((req, res) => {
       ORDER BY bs.date, bs.start_min`,
     school.id, todayStr());
   const sessions = rows.filter((s) => visible.includes(s.open_to)).map(publicSession);
-  res.json({
+
+  const out = {
     school: school.name,
     school_logo: school.logo_image || null,
     school_contact_phone: school.contact_phone || null,
     student: student ? { name: student.name, nickname: student.nickname || null } : null,
     sessions,
-  });
+  };
+
+  if (student) {
+    const sch = get('SELECT categories_json FROM schools WHERE id = ?', school.id) || {};
+    const label = catLabeller(sch);
+    // recurring weekly classes the student is enrolled in
+    const slots = all(
+      `SELECT sl.day_of_week, sl.start_min, sl.end_min, sl.category, sl.title, t.name AS teacher_name
+         FROM slot_students ss
+         JOIN schedule_slots sl ON sl.id = ss.slot_id
+         LEFT JOIN teachers t ON t.id = sl.teacher_id
+        WHERE ss.student_id = ? ORDER BY sl.day_of_week, sl.start_min`, student.id);
+    out.schedule = slots.map((sl) => ({
+      day: DOW[sl.day_of_week] || '',
+      day_of_week: sl.day_of_week,
+      start: hhmm(sl.start_min),
+      end: hhmm(sl.end_min),
+      category: sl.category || null,
+      category_label: label(sl.category),
+      title: sl.title || null,
+      teacher: sl.teacher_name || null,
+    }));
+    // distinct subjects (for the makeup-request subject picker)
+    const seen = new Set();
+    out.subjects = [];
+    for (const sl of slots) {
+      const key = sl.category || '';
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.subjects.push({ key: sl.category || null, label: label(sl.category) || 'ทั่วไป' });
+    }
+    // the student's own makeup requests (status badges on the page)
+    out.makeup_requests = all(
+      `SELECT id, category, date, start_min, end_min, status, review_note, created_at
+         FROM makeup_requests WHERE student_id = ? AND school_id = ?
+        ORDER BY created_at DESC LIMIT 20`, student.id, school.id)
+      .map((m) => ({
+        id: m.id,
+        category: m.category || null,
+        category_label: label(m.category),
+        date: m.date,
+        day: DOW[(new Date(m.date + 'T00:00:00Z').getUTCDay() + 6) % 7] || '',
+        start: hhmm(m.start_min),
+        end: hhmm(m.end_min),
+        status: m.status,
+        review_note: m.review_note || null,
+      }));
+  }
+
+  res.json(out);
+}));
+
+// POST /api/public/book/makeup-request — an existing student's parent proposes a make-up
+// day/time/subject (NO AUTH; scoped by parent_token). Stored as 'pending' for admin review.
+// Body: { token, date, start_min, end_min, category?, reason? }
+r.post('/book/makeup-request', wrap((req, res) => {
+  const b = req.body || {};
+  const token = String(b.token || '');
+  if (token.length < 8) throw bad('not found', 404);
+  const student = get('SELECT * FROM students WHERE parent_token = ?', token);
+  if (!student) throw bad('not found', 404);
+
+  const date = String(b.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw bad('กรุณาเลือกวันที่');
+  if (date < todayStr()) throw bad('กรุณาเลือกวันที่ในอนาคต');
+  const start = parseInt(b.start_min);
+  const end = parseInt(b.end_min);
+  if (Number.isNaN(start) || Number.isNaN(end)) throw bad('กรุณาเลือกเวลา');
+  if (start < 0 || start > 1439 || end < 1 || end > 1440 || end <= start) throw bad('ช่วงเวลาไม่ถูกต้อง');
+  const category = b.category ? String(b.category).slice(0, 60) : null;
+  const reason = b.reason ? String(b.reason).trim().slice(0, 300) : null;
+
+  // throttle obvious spam: at most a few open (pending) requests at a time
+  const pendingCount = get(
+    `SELECT COUNT(*) AS n FROM makeup_requests WHERE student_id = ? AND status = 'pending'`, student.id).n;
+  if (pendingCount >= 5) throw bad('มีคำขอที่รออนุมัติอยู่หลายรายการแล้ว กรุณารอการตอบกลับก่อนค่ะ');
+
+  const result = run(
+    `INSERT INTO makeup_requests (school_id, student_id, category, date, start_min, end_min, reason)
+     VALUES (?,?,?,?,?,?,?)`,
+    student.school_id, student.id, category, date, start, end, reason);
+
+  res.status(201).json({ ok: true, id: Number(result.lastInsertRowid) });
+}));
+
+// POST /api/public/book/makeup-request/cancel — a parent withdraws their own PENDING request.
+// Body: { token, request_id }
+r.post('/book/makeup-request/cancel', wrap((req, res) => {
+  const b = req.body || {};
+  const token = String(b.token || '');
+  const id = parseInt(b.request_id) || 0;
+  if (token.length < 8) throw bad('not found', 404);
+  if (!id) throw bad('request_id required');
+  const student = get('SELECT id FROM students WHERE parent_token = ?', token);
+  if (!student) throw bad('not found', 404);
+  const mr = get('SELECT * FROM makeup_requests WHERE id = ? AND student_id = ?', id, student.id);
+  if (!mr) throw bad('not found', 404);
+  if (mr.status !== 'pending') throw bad('คำขอนี้ถูกพิจารณาไปแล้ว ไม่สามารถยกเลิกได้');
+  run("UPDATE makeup_requests SET status = 'cancelled' WHERE id = ?", mr.id);
+  res.json({ ok: true });
 }));
 
 // POST /api/public/book — book a seat.
