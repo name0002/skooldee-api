@@ -63,8 +63,10 @@ r.post('/', requireRole('owner', 'admin', 'teacher'), wrap((req, res) => {
 
 // DELETE /api/assessments/:id — remove an assessment (owner/admin/teacher)
 r.delete('/:id', requireRole('owner', 'admin', 'teacher'), wrap((req, res) => {
-  const result = run('DELETE FROM assessments WHERE id = ? AND school_id = ?', req.params.id, req.schoolId);
-  if (!result.changes) throw bad('assessment not found', 404);
+  const a = get('SELECT id, student_id FROM assessments WHERE id = ? AND school_id = ?', req.params.id, req.schoolId);
+  if (!a) throw bad('assessment not found', 404);
+  if (!ownsStudent(req, a.student_id)) throw bad('assessment not found', 404);
+  run('DELETE FROM assessments WHERE id = ?', a.id);
   res.json({ ok: true });
 }));
 
